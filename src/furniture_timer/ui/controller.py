@@ -57,8 +57,15 @@ class TimerController(QObject):
     def is_ticking(self) -> bool:
         return self._timer.isActive()
 
+    @property
+    def state(self) -> TimerState:
+        return self._model.state
+
     def tick(self) -> None:
         self._render(self._model.snapshot())
+
+    def toggle_start_pause(self) -> None:
+        self._on_start_pause()
 
     def _on_start_pause(self) -> None:
         self._model.toggle()

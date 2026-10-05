@@ -51,6 +51,9 @@ _STRINGS: Final[dict[str, dict[str, str]]] = {
         "history.export.title": "Export sessions",
         "history.export.filter": "CSV files (*.csv)",
         "history.error.write": "Could not write CSV file",
+        # Task 13 — system tray
+        "tray.action.show": "Show",
+        "tray.action.quit": "Quit",
     },
     "ru": {},  # filled in Task 14
 }

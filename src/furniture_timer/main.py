@@ -18,6 +18,7 @@ from furniture_timer.ui.idle_controller import IdleController
 from furniture_timer.ui.idle_dialog import IdleDialog
 from furniture_timer.ui.settings_controller import SettingsController
 from furniture_timer.ui.settings_dialog import SettingsDialog
+from furniture_timer.ui.tray_controller import TrayController
 from furniture_timer.ui.widget import TimerWidget
 
 log = logging.getLogger(__name__)
@@ -99,8 +100,14 @@ def _run_gui(settings: Settings, conn: sqlite3.Connection) -> int:
         timer_controller,
         parent=app,
     )
+    tray = TrayController(widget, timer_controller, parent=app)
+    if tray.active:
+        app.setQuitOnLastWindowClosed(False)
+        widget.close_clicked.connect(tray.hide_widget)
+    else:
+        widget.close_clicked.connect(app.quit)
+    tray.quit_requested.connect(app.quit)
     app.aboutToQuit.connect(detector.stop)
-    widget.close_clicked.connect(app.quit)
     widget.show()
     exit_code = app.exec()
     log.info("Furniture Timer exiting with code %d", exit_code)

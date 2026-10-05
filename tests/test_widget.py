@@ -53,6 +53,8 @@ USED_KEYS = [
     "history.export.title",
     "history.export.filter",
     "history.error.write",
+    "tray.action.show",
+    "tray.action.quit",
 ]
 
 
