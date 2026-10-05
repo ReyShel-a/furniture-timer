@@ -6,8 +6,11 @@ use wall-clock unix seconds.
 Idle semantics:
 - auto_pause() is retroactive: active time is rolled back to the moment idle
   started (now - reported idle seconds), not to the threshold crossing.
-- The idle span lasts until the user resolves it (button press).
-- KEEP -> PAUSED, RESUME -> RUNNING: the idle span is added to idle_seconds.
+- idle_elapsed is the peak idle observed during AUTO_PAUSED, not time until
+  the button press. observe_idle() records detector readings; the peak only
+  grows. Time between the user returning and the button is neither active
+  nor idle.
+- KEEP -> PAUSED, RESUME -> RUNNING: peak idle is added to idle_seconds.
 - DISCARD -> RUNNING: the idle span is dropped entirely.
 - stop() while AUTO_PAUSED resolves the idle span as KEEP first.
 """
@@ -69,6 +72,7 @@ class TimerModel:
         self._segment_start = 0.0
         self._idle_total = 0.0
         self._idle_start = 0.0
+        self._peak_idle = 0.0
 
     @property
     def state(self) -> TimerState:
@@ -92,10 +96,10 @@ class TimerModel:
 
     @property
     def pending_idle_seconds(self) -> float | None:
-        """Length of the unresolved idle span while AUTO_PAUSED, else None."""
+        """Peak idle observed while AUTO_PAUSED, else None."""
         if self._state is not TimerState.AUTO_PAUSED:
             return None
-        return self._clock() - self._idle_start
+        return self._peak_idle
 
     def snapshot(self) -> TimerSnapshot:
         """Read-only view for a UI tick; never changes state."""
@@ -138,13 +142,21 @@ class TimerModel:
         idle_start = max(self._segment_start, now - max(0.0, idle_seconds))
         self._close_segment(idle_start)
         self._idle_start = idle_start
+        self._peak_idle = now - idle_start
         self._state = TimerState.AUTO_PAUSED
+
+    def observe_idle(self, idle_seconds: float) -> None:
+        """Record a detector reading; the peak idle span only grows."""
+        self._require(TimerState.AUTO_PAUSED, op="observe_idle")
+        elapsed = max(0.0, self._clock() - self._idle_start)
+        capped = min(max(0.0, idle_seconds), elapsed)
+        self._peak_idle = max(self._peak_idle, capped)
 
     def resolve_idle(self, choice: IdleChoice) -> None:
         self._require(TimerState.AUTO_PAUSED, op="resolve_idle")
         now = self._clock()
         if choice is not IdleChoice.DISCARD:
-            self._idle_total += now - self._idle_start
+            self._idle_total += self._peak_idle
         if choice is IdleChoice.KEEP:
             self._state = TimerState.PAUSED
         else:

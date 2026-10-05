@@ -6,6 +6,7 @@ from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWi
 
 from furniture_timer.formatting import format_clock, format_hms
 from furniture_timer.i18n import t
+from furniture_timer.settings import DEFAULT_CURRENCY, DEFAULT_HOURLY_RATE
 from furniture_timer.timer_model import TimerState
 from furniture_timer.ui.outlined_label import OutlinedLabel
 from furniture_timer.ui.theme import apply_theme, background_color
@@ -63,6 +64,7 @@ class TimerWidget(QWidget):
         apply_theme(self)
 
         self.show_time(format_hms(0))
+        self.show_price(DEFAULT_HOURLY_RATE, 0.0, DEFAULT_CURRENCY)
         self.show_state(TimerState.IDLE)
         self.show_session_start(None)
 

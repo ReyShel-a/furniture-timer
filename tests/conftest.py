@@ -9,6 +9,8 @@ from collections.abc import Iterator  # noqa: E402
 import pytest  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
+pytest_plugins = ["tests.idle_fixtures"]
+
 
 @pytest.fixture(scope="session")
 def qapp() -> QApplication:

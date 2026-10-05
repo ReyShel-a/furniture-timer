@@ -6,10 +6,13 @@ import sys
 from PySide6.QtWidgets import QApplication
 
 from furniture_timer import __version__, db, paths
+from furniture_timer.idle import create_idle_detector
 from furniture_timer.logging_setup import setup_logging
 from furniture_timer.settings import Settings
 from furniture_timer.timer_model import TimerModel
 from furniture_timer.ui.controller import TimerController
+from furniture_timer.ui.idle_controller import IdleController
+from furniture_timer.ui.idle_dialog import IdleDialog
 from furniture_timer.ui.widget import TimerWidget
 
 log = logging.getLogger(__name__)
@@ -35,8 +38,26 @@ def main() -> int:
 def _run_gui(settings: Settings) -> int:
     app = QApplication.instance() or QApplication(sys.argv)
     widget = TimerWidget()
-    widget.show_price(settings.hourly_rate, 0.0, settings.currency)
-    TimerController(TimerModel(), widget, parent=app)
+    model = TimerModel()
+    timer_controller = TimerController(
+        model,
+        widget,
+        hourly_rate=lambda: settings.hourly_rate,
+        currency=lambda: settings.currency,
+        parent=app,
+    )
+    detector = create_idle_detector()
+    dialog = IdleDialog(widget)
+    IdleController(
+        model,
+        widget,
+        dialog,
+        detector,
+        threshold=lambda: float(settings.idle_threshold_sec),
+        timer_controller=timer_controller,
+        parent=app,
+    )
+    app.aboutToQuit.connect(detector.stop)
     widget.close_clicked.connect(app.quit)
     widget.show()
     exit_code = app.exec()

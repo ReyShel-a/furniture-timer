@@ -19,6 +19,16 @@ _STRINGS: Final[dict[str, dict[str, str]]] = {
         "widget.price_line": "{rate:.2f} {currency}/h  ·  {cost:.2f} {currency}",
         "widget.tooltip.started": "Session started at {time}",
         "widget.tooltip.not_started": "No active session",
+        # Task 8 — idle modal
+        "idle.dialog.title": "Idle detected",
+        "idle.dialog.message": "Idle {duration}",
+        "idle.prompt.message": "Resume? Idle {duration}",
+        "idle.btn.keep": "Keep",
+        "idle.btn.resume": "Resume",
+        "idle.btn.discard": "Discard idle",
+        "idle.btn.keep.tooltip": "Stay paused; idle time is recorded",
+        "idle.btn.resume.tooltip": "Continue; idle time is recorded",
+        "idle.btn.discard.tooltip": "Continue; idle time is not recorded",
     },
     "ru": {},  # filled in Task 14
 }

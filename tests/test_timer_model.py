@@ -41,11 +41,17 @@ def model(clock: FakeClock) -> TimerModel:
 
 
 def _auto_paused_example(model: TimerModel, clock: FakeClock) -> None:
-    """Work 100 s, idle starts at T0=100, threshold fires at T0+300, decision at T0+510."""
+    """Work 100 s, idle starts at T0=100, peak 510 s, then the user returns.
+
+    30 s then pass before the decision; that gap is neither active nor idle.
+    """
     model.start()
     clock.advance(100 + THRESHOLD)
     model.auto_pause(THRESHOLD)
     clock.advance(210)
+    model.observe_idle(THRESHOLD + 210)
+    model.observe_idle(0)
+    clock.advance(30)
 
 
 def test_initial_state(model: TimerModel) -> None:
@@ -87,11 +93,14 @@ def test_toggle_cycles_states(model: TimerModel) -> None:
         ([], "resume"),
         ([], "stop"),
         ([], "auto_pause"),
+        ([], "observe_idle"),
         (["start"], "start"),
         (["start"], "resume"),
         (["start"], "resolve_idle"),
+        (["start"], "observe_idle"),
         (["start", "pause"], "pause"),
         (["start", "pause"], "auto_pause"),
+        (["start", "pause"], "observe_idle"),
     ],
 )
 def test_invalid_transitions_raise(model: TimerModel, setup: list[str], op: str) -> None:
@@ -99,6 +108,7 @@ def test_invalid_transitions_raise(model: TimerModel, setup: list[str], op: str)
         getattr(model, step)()
     args: dict[str, tuple[object, ...]] = {
         "auto_pause": (THRESHOLD,),
+        "observe_idle": (THRESHOLD,),
         "resolve_idle": (IdleChoice.RESUME,),
     }
     with pytest.raises(InvalidTransition):
@@ -114,6 +124,8 @@ def test_auto_pause_is_retroactive(model: TimerModel, clock: FakeClock) -> None:
     assert model.active_seconds == 100
     clock.advance(200)
     assert model.active_seconds == 100
+    assert model.pending_idle_seconds == THRESHOLD
+    model.observe_idle(THRESHOLD + 200)
     assert model.pending_idle_seconds == THRESHOLD + 200
 
 
@@ -215,6 +227,7 @@ def test_multiple_idle_cycles_accumulate(model: TimerModel, clock: FakeClock) ->
         clock.advance(60 + THRESHOLD)
         model.auto_pause(THRESHOLD)
         clock.advance(10)
+        model.observe_idle(THRESHOLD + 10)
         model.resolve_idle(IdleChoice.RESUME)
     clock.advance(60)
     model.auto_pause(0)
@@ -280,6 +293,77 @@ def test_snapshot_is_pure_and_immutable(model: TimerModel, clock: FakeClock) -> 
     assert model.state is TimerState.RUNNING
     with pytest.raises(dataclasses.FrozenInstanceError):
         first.active_seconds = 0.0  # type: ignore[misc]
+
+
+def test_observe_idle_peak_only_grows(model: TimerModel, clock: FakeClock) -> None:
+    model.start()
+    clock.advance(100 + THRESHOLD)
+    model.auto_pause(THRESHOLD)
+    clock.advance(210)
+    model.observe_idle(THRESHOLD + 210)
+    assert model.pending_idle_seconds == 510
+
+    model.observe_idle(0)
+    assert model.pending_idle_seconds == 510
+    clock.advance(30)
+    model.observe_idle(5)
+    assert model.pending_idle_seconds == 510
+
+
+def test_observe_idle_clamps_to_elapsed_since_idle_start(
+    model: TimerModel, clock: FakeClock
+) -> None:
+    model.start()
+    clock.advance(100 + THRESHOLD)
+    model.auto_pause(THRESHOLD)
+    clock.advance(10)
+    model.observe_idle(10_000)
+
+    assert model.pending_idle_seconds == THRESHOLD + 10
+
+
+def test_observe_idle_negative_does_not_shrink_peak(
+    model: TimerModel, clock: FakeClock
+) -> None:
+    model.start()
+    clock.advance(THRESHOLD)
+    model.auto_pause(THRESHOLD)
+    model.observe_idle(-1)
+
+    assert model.pending_idle_seconds == THRESHOLD
+
+
+@pytest.mark.parametrize("choice", list(IdleChoice))
+def test_resolve_idle_does_not_increase_active_seconds(
+    model: TimerModel, clock: FakeClock, choice: IdleChoice
+) -> None:
+    _auto_paused_example(model, clock)
+    before = model.active_seconds
+    model.resolve_idle(choice)
+    assert model.active_seconds == before == 100
+
+
+def test_late_resolve_after_return_keeps_peak(model: TimerModel, clock: FakeClock) -> None:
+    _auto_paused_example(model, clock)
+    model.resolve_idle(IdleChoice.KEEP)
+
+    assert model.idle_seconds == 510
+    assert model.active_seconds == 100
+
+
+def test_second_idle_span_in_same_auto_pause_replaces_peak_if_longer(
+    model: TimerModel, clock: FakeClock
+) -> None:
+    model.start()
+    clock.advance(THRESHOLD)
+    model.auto_pause(THRESHOLD)
+    model.observe_idle(0)
+    clock.advance(400)
+    model.observe_idle(400)
+
+    assert model.pending_idle_seconds == 400
+    model.resolve_idle(IdleChoice.RESUME)
+    assert model.idle_seconds == 400
 
 
 def test_model_has_no_qt_imports() -> None:

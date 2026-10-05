@@ -10,6 +10,8 @@ from furniture_timer.ui.controller import TICK_INTERVAL_MS, TimerController
 from furniture_timer.ui.widget import TimerWidget
 
 WALL_START = 1_700_000_000.0
+RATE = 10.0
+CURRENCY = "₽"
 
 
 class FakeClock:
@@ -24,6 +26,18 @@ class FakeClock:
 
     def advance(self, seconds: float) -> None:
         self.now += seconds
+
+
+class PriceSource:
+    def __init__(self, rate: float = RATE, currency: str = CURRENCY) -> None:
+        self.rate = rate
+        self.currency = currency
+
+    def hourly_rate(self) -> float:
+        return self.rate
+
+    def currency_code(self) -> str:
+        return self.currency
 
 
 @pytest.fixture
@@ -46,14 +60,29 @@ def widget(qapp: QApplication) -> Iterator[TimerWidget]:
 
 
 @pytest.fixture
-def controller(model: TimerModel, widget: TimerWidget) -> Iterator[TimerController]:
-    c = TimerController(model, widget)
+def price() -> PriceSource:
+    return PriceSource()
+
+
+@pytest.fixture
+def controller(
+    model: TimerModel, widget: TimerWidget, price: PriceSource
+) -> Iterator[TimerController]:
+    c = TimerController(
+        model, widget, hourly_rate=price.hourly_rate, currency=price.currency_code
+    )
     yield c
     c.deleteLater()
 
 
 def _time(widget: TimerWidget) -> str:
     label = widget.findChild(QLabel, "timeLabel")
+    assert label is not None
+    return label.text()
+
+
+def _price(widget: TimerWidget) -> str:
+    label = widget.findChild(QLabel, "priceLabel")
     assert label is not None
     return label.text()
 
@@ -75,6 +104,7 @@ def test_tick_interval_is_one_second() -> None:
 def test_initial_view(controller: TimerController, widget: TimerWidget) -> None:
     assert controller.is_ticking is False
     assert _time(widget) == "00:00:00"
+    assert _price(widget) == "10.00 ₽/h  ·  0.00 ₽"
     assert _button(widget, "startPauseButton").text() == "Start"
     assert not _button(widget, "stopButton").isEnabled()
 
@@ -85,6 +115,7 @@ def test_tick_in_idle_keeps_zero(
     clock.advance(50)
     controller.tick()
     assert _time(widget) == "00:00:00"
+    assert _price(widget) == "10.00 ₽/h  ·  0.00 ₽"
 
 
 def test_start_runs_and_ticks(
@@ -101,6 +132,7 @@ def test_start_runs_and_ticks(
     clock.advance(3661.9)
     controller.tick()
     assert _time(widget) == "01:01:01"
+    assert _price(widget) == "10.00 ₽/h  ·  10.17 ₽"
 
 
 def test_pause_freezes_and_resume_continues(
@@ -116,6 +148,7 @@ def test_pause_freezes_and_resume_continues(
     clock.advance(100)
     controller.tick()
     assert _time(widget) == "00:00:10"
+    assert _price(widget) == "10.00 ₽/h  ·  0.03 ₽"
 
     _click_start_pause(widget)
     assert controller.is_ticking is True
@@ -123,6 +156,7 @@ def test_pause_freezes_and_resume_continues(
     clock.advance(5)
     controller.tick()
     assert _time(widget) == "00:00:15"
+    assert _price(widget) == "10.00 ₽/h  ·  0.04 ₽"
 
 
 def test_stop_resets_view(
@@ -137,6 +171,7 @@ def test_stop_resets_view(
     assert controller.is_ticking is False
     assert model.state is TimerState.IDLE
     assert _time(widget) == "00:00:00"
+    assert _price(widget) == "10.00 ₽/h  ·  0.00 ₽"
     assert _button(widget, "startPauseButton").text() == "Start"
     assert not _button(widget, "stopButton").isEnabled()
     assert widget.toolTip() == "No active session"
@@ -150,18 +185,61 @@ def test_stop_signal_in_idle_is_ignored(
     assert controller.is_ticking is False
 
 
-def test_ticks_do_not_touch_price_label(
+def test_tick_updates_live_cost(
     controller: TimerController, widget: TimerWidget, clock: FakeClock
 ) -> None:
-    widget.show_price(10.0, 0.0, "€")
-    price = widget.findChild(QLabel, "priceLabel")
-    assert price is not None
-    before = price.text()
-
     _click_start_pause(widget)
     clock.advance(3600)
     controller.tick()
-    assert price.text() == before
+    assert _price(widget) == "10.00 ₽/h  ·  10.00 ₽"
+
+
+def test_pause_freezes_cost(
+    controller: TimerController, widget: TimerWidget, clock: FakeClock
+) -> None:
+    _click_start_pause(widget)
+    clock.advance(3600)
+    controller.tick()
+    _click_start_pause(widget)
+
+    clock.advance(3600)
+    controller.tick()
+    assert _time(widget) == "01:00:00"
+    assert _price(widget) == "10.00 ₽/h  ·  10.00 ₽"
+
+
+def test_live_rate_change_applies_on_next_tick(
+    controller: TimerController,
+    widget: TimerWidget,
+    clock: FakeClock,
+    price: PriceSource,
+) -> None:
+    _click_start_pause(widget)
+    clock.advance(3600)
+    controller.tick()
+    assert _price(widget) == "10.00 ₽/h  ·  10.00 ₽"
+
+    price.rate = 20.0
+    price.currency = "$"
+    controller.tick()
+    assert _price(widget) == "20.00 $/h  ·  20.00 $"
+
+
+def test_auto_pause_rolls_cost_back(
+    controller: TimerController,
+    widget: TimerWidget,
+    model: TimerModel,
+    clock: FakeClock,
+) -> None:
+    _click_start_pause(widget)
+    clock.advance(3600)
+    controller.tick()
+    assert _price(widget) == "10.00 ₽/h  ·  10.00 ₽"
+
+    model.auto_pause(1800)
+    controller.refresh()
+    assert _time(widget) == "00:30:00"
+    assert _price(widget) == "10.00 ₽/h  ·  5.00 ₽"
 
 
 def test_real_qtimer_drives_tick(

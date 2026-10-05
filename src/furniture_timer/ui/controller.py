@@ -1,11 +1,14 @@
 """Glue between TimerModel and TimerWidget: owns the 1 s tick QTimer."""
 
 import logging
+from collections.abc import Callable
 from typing import Final
 
-from PySide6.QtCore import QObject, Qt, QTimer
+from PySide6.QtCore import QObject, Qt, QTimer, Signal
 
+from furniture_timer.cost import live_cost
 from furniture_timer.formatting import format_hms
+from furniture_timer.settings import DEFAULT_CURRENCY, DEFAULT_HOURLY_RATE
 from furniture_timer.timer_model import TimerModel, TimerSnapshot, TimerState
 from furniture_timer.ui.widget import TimerWidget
 
@@ -15,16 +18,22 @@ TICK_INTERVAL_MS: Final[int] = 1000
 
 
 class TimerController(QObject):
+    state_changed = Signal()
+
     def __init__(
         self,
         model: TimerModel,
         widget: TimerWidget,
+        hourly_rate: Callable[[], float] = lambda: DEFAULT_HOURLY_RATE,
+        currency: Callable[[], str] = lambda: DEFAULT_CURRENCY,
         interval_ms: int = TICK_INTERVAL_MS,
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
         self._model = model
         self._widget = widget
+        self._hourly_rate = hourly_rate
+        self._currency = currency
         self._timer = QTimer(self)
         self._timer.setInterval(interval_ms)
         self._timer.setTimerType(Qt.TimerType.PreciseTimer)
@@ -33,7 +42,7 @@ class TimerController(QObject):
         widget.start_pause_clicked.connect(self._on_start_pause)
         widget.stop_clicked.connect(self._on_stop)
 
-        self._refresh()
+        self.refresh()
 
     @property
     def is_ticking(self) -> bool:
@@ -44,7 +53,7 @@ class TimerController(QObject):
 
     def _on_start_pause(self) -> None:
         self._model.toggle()
-        self._refresh()
+        self.refresh()
 
     def _on_stop(self) -> None:
         if self._model.state is TimerState.IDLE:
@@ -55,15 +64,19 @@ class TimerController(QObject):
             result.active_seconds,
             result.idle_seconds,
         )
-        self._refresh()
+        self.refresh()
 
-    def _refresh(self) -> None:
+    def refresh(self) -> None:
         snap = self._model.snapshot()
         self._render(snap)
         self._sync_timer(snap.state)
+        self.state_changed.emit()
 
     def _render(self, snap: TimerSnapshot) -> None:
+        rate = self._hourly_rate()
+        cost = live_cost(snap.active_seconds, rate)
         self._widget.show_time(format_hms(snap.active_seconds))
+        self._widget.show_price(rate, cost, self._currency())
         self._widget.show_state(snap.state)
         self._widget.show_session_start(snap.start_ts)
 

@@ -11,7 +11,7 @@ T = TypeVar("T")
 log = logging.getLogger(__name__)
 
 DEFAULT_HOURLY_RATE = 0.0
-DEFAULT_CURRENCY = "€"
+DEFAULT_CURRENCY = "₽"
 DEFAULT_IDLE_THRESHOLD_SEC = 300
 
 KEY_HOURLY_RATE = "hourly_rate"

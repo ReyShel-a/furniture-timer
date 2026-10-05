@@ -24,20 +24,20 @@ def test_defaults_on_empty_db(conn: sqlite3.Connection) -> None:
     settings = Settings(conn)
 
     assert settings.hourly_rate == DEFAULT_HOURLY_RATE == 0.0
-    assert settings.currency == DEFAULT_CURRENCY == "€"
+    assert settings.currency == DEFAULT_CURRENCY == "₽"
     assert settings.idle_threshold_sec == DEFAULT_IDLE_THRESHOLD_SEC == 300
 
 
 def test_save_and_load_roundtrip(conn: sqlite3.Connection) -> None:
     settings = Settings(conn)
     settings.hourly_rate = 42.5
-    settings.currency = "₽"
+    settings.currency = "$"
     settings.idle_threshold_sec = 120
     settings.save()
 
     reloaded = Settings(conn)
     assert reloaded.hourly_rate == 42.5
-    assert reloaded.currency == "₽"
+    assert reloaded.currency == "$"
     assert reloaded.idle_threshold_sec == 120
 
 

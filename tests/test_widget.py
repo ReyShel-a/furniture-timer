@@ -24,6 +24,15 @@ USED_KEYS = [
     "widget.price_line",
     "widget.tooltip.started",
     "widget.tooltip.not_started",
+    "idle.dialog.title",
+    "idle.dialog.message",
+    "idle.prompt.message",
+    "idle.btn.keep",
+    "idle.btn.resume",
+    "idle.btn.discard",
+    "idle.btn.keep.tooltip",
+    "idle.btn.resume.tooltip",
+    "idle.btn.discard.tooltip",
 ]
 
 
@@ -69,6 +78,7 @@ def test_children_have_object_names(widget: TimerWidget) -> None:
 
 def test_initial_view(widget: TimerWidget) -> None:
     assert _label(widget, "timeLabel").text() == "00:00:00"
+    assert _label(widget, "priceLabel").text() == "0.00 ₽/h  ·  0.00 ₽"
     assert _button(widget, "startPauseButton").text() == "Start"
     assert not _button(widget, "stopButton").isEnabled()
     assert widget.toolTip() == "No active session"
@@ -120,8 +130,8 @@ def test_show_time(widget: TimerWidget) -> None:
 
 
 def test_show_price(widget: TimerWidget) -> None:
-    widget.show_price(12.5, 3.4, "€")
-    assert _label(widget, "priceLabel").text() == "12.50 €/h  ·  3.40 €"
+    widget.show_price(12.5, 3.4, "₽")
+    assert _label(widget, "priceLabel").text() == "12.50 ₽/h  ·  3.40 ₽"
 
 
 def test_session_start_tooltip(widget: TimerWidget) -> None:
@@ -190,7 +200,9 @@ def test_fallback_drag_moves_window(widget: TimerWidget) -> None:
 @pytest.mark.parametrize("key", USED_KEYS)
 def test_used_i18n_keys_exist(key: str) -> None:
     assert key in _STRINGS["en"]
-    assert t(key, rate=0.0, cost=0.0, currency="€", time="00:00") != key
+    assert t(
+        key, rate=0.0, cost=0.0, currency="₽", time="00:00", duration="00:00:00"
+    ) != key
 
 
 def test_no_unused_i18n_keys() -> None:
