@@ -6,6 +6,8 @@ import sqlite3
 from collections.abc import Callable
 from typing import TypeVar
 
+from furniture_timer.i18n import DEFAULT_LANG, SUPPORTED_LANGS, system_language
+
 T = TypeVar("T")
 
 log = logging.getLogger(__name__)
@@ -13,10 +15,12 @@ log = logging.getLogger(__name__)
 DEFAULT_HOURLY_RATE = 0.0
 DEFAULT_CURRENCY = "₽"
 DEFAULT_IDLE_THRESHOLD_SEC = 300
+DEFAULT_LANGUAGE = DEFAULT_LANG
 
 KEY_HOURLY_RATE = "hourly_rate"
 KEY_CURRENCY = "currency"
 KEY_IDLE_THRESHOLD_SEC = "idle_threshold_sec"
+KEY_LANGUAGE = "language"
 
 
 def parse_hourly_rate(raw: str) -> float:
@@ -40,6 +44,13 @@ def parse_idle_threshold(raw: str) -> int:
     return value
 
 
+def parse_language(raw: str) -> str:
+    value = raw.strip().lower()
+    if value not in SUPPORTED_LANGS:
+        raise ValueError(f"language must be one of {SUPPORTED_LANGS}, got {raw!r}")
+    return value
+
+
 class Settings:
     """In-memory view of the settings table; call save() to persist changes.
 
@@ -51,6 +62,7 @@ class Settings:
         self._hourly_rate = DEFAULT_HOURLY_RATE
         self._currency = DEFAULT_CURRENCY
         self._idle_threshold_sec = DEFAULT_IDLE_THRESHOLD_SEC
+        self._language = system_language()
         self.load()
 
     @property
@@ -77,20 +89,33 @@ class Settings:
     def idle_threshold_sec(self, value: int) -> None:
         self._idle_threshold_sec = parse_idle_threshold(str(value))
 
+    @property
+    def language(self) -> str:
+        return self._language
+
+    @language.setter
+    def language(self, value: str) -> None:
+        self._language = parse_language(value)
+
     def load(self) -> None:
-        """Read stored values; invalid or missing ones fall back to defaults."""
+        """Read stored values. Invalid ones fall back to defaults; missing language follows the OS."""
         rows: dict[str, str] = dict(self._conn.execute("SELECT key, value FROM settings"))
         self._hourly_rate = _read(rows, KEY_HOURLY_RATE, parse_hourly_rate, DEFAULT_HOURLY_RATE)
         self._currency = _read(rows, KEY_CURRENCY, parse_currency, DEFAULT_CURRENCY)
         self._idle_threshold_sec = _read(
             rows, KEY_IDLE_THRESHOLD_SEC, parse_idle_threshold, DEFAULT_IDLE_THRESHOLD_SEC
         )
+        if KEY_LANGUAGE not in rows:
+            self._language = system_language()
+        else:
+            self._language = _read(rows, KEY_LANGUAGE, parse_language, DEFAULT_LANGUAGE)
 
     def save(self) -> None:
         values = {
             KEY_HOURLY_RATE: repr(self._hourly_rate),
             KEY_CURRENCY: self._currency,
             KEY_IDLE_THRESHOLD_SEC: str(self._idle_threshold_sec),
+            KEY_LANGUAGE: self._language,
         }
         with self._conn:
             self._conn.executemany(

@@ -31,6 +31,7 @@ class IdleDialog(QWidget):
         self.setWindowTitle(t("idle.dialog.title"))
         self._background = background_color()
         self._prompt = False
+        self._duration: str | None = None
 
         self._message = QLabel(self)
         self._message.setObjectName("idleMessage")
@@ -89,11 +90,24 @@ class IdleDialog(QWidget):
     def place_near(self, widget_geo: QRect) -> None:
         _place_near(self, widget_geo)
 
+    def retranslate(self) -> None:
+        self.setWindowTitle(t("idle.dialog.title"))
+        self._keep.setText(t("idle.btn.keep"))
+        self._keep.setToolTip(t("idle.btn.keep.tooltip"))
+        self._discard.setText(t("idle.btn.discard"))
+        self._discard.setToolTip(t("idle.btn.discard.tooltip"))
+        self._resume.setText(t("idle.btn.resume"))
+        self._resume.setToolTip(t("idle.btn.resume.tooltip"))
+        if self._duration is not None:
+            self._set_message(self._duration)
+        self.adjustSize()
+
     def paintEvent(self, event: QPaintEvent) -> None:
         painter = QPainter(self)
         painter.fillRect(event.rect(), self._background)
 
     def _set_message(self, duration: str) -> None:
+        self._duration = duration
         key = "idle.prompt.message" if self._prompt else "idle.dialog.message"
         self._message.setText(t(key, duration=duration))
 

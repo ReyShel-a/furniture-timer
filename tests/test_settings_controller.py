@@ -13,6 +13,7 @@ from furniture_timer.timer_model import TimerModel
 from furniture_timer.ui.controller import TimerController
 from furniture_timer.ui.settings_controller import SettingsController
 from furniture_timer.ui.settings_dialog import SettingsDialog
+from furniture_timer.ui.tray_controller import TrayController
 from furniture_timer.ui.widget import TimerWidget
 
 
@@ -108,7 +109,7 @@ def test_open_loads_current_settings(
     settings.idle_threshold_sec = 90
     controller.open()
     assert dialog.isVisible()
-    assert dialog.values() == ("8.5", "$", "90")
+    assert dialog.values() == ("8.5", "$", "90", settings.language)
 
 
 def test_save_persists_valid_values(
@@ -135,7 +136,9 @@ def test_save_refreshes_price_label(
     controller: SettingsController,
     dialog: SettingsDialog,
     widget: TimerWidget,
+    settings: Settings,
 ) -> None:
+    settings.language = "en"
     controller.open()
     _fill(dialog, "12.5", "$", "300")
     _button(dialog, "saveButton").click()
@@ -198,7 +201,7 @@ def test_reopen_while_visible_keeps_unsaved_edits(
     controller.open()
     _fill(dialog, "7", "£", "45")
     controller.open()
-    assert dialog.values() == ("7", "£", "45")
+    assert dialog.values()[:3] == ("7", "£", "45")
 
 
 def test_reopen_after_cancel_reloads_saved_values(
@@ -212,6 +215,7 @@ def test_reopen_after_cancel_reloads_saved_values(
         str(settings.hourly_rate),
         settings.currency,
         str(settings.idle_threshold_sec),
+        settings.language,
     )
 
 
@@ -237,3 +241,27 @@ def test_hidden_settings_do_not_follow(
     widget.move(widget.pos() + QPoint(40, 25))
     assert not dialog.isVisible()
     assert dialog.pos() == parked
+
+
+def test_save_switches_language_on_widget_and_tray(
+    controller: SettingsController,
+    dialog: SettingsDialog,
+    widget: TimerWidget,
+    timer_controller: TimerController,
+) -> None:
+    tray = TrayController(widget, timer_controller, available=True)
+    controller.language_changed.connect(widget.retranslate)
+    controller.language_changed.connect(dialog.retranslate)
+    controller.language_changed.connect(tray.retranslate)
+    controller.open()
+    dialog.set_values(0.0, "₽", 300, "ru")
+    _button(dialog, "saveButton").click()
+
+    start = widget.findChild(QPushButton, "startPauseButton")
+    assert start is not None
+    assert start.text() == t("btn.start", lang="ru")
+    assert widget.windowTitle() == t("app.title", lang="ru")
+    assert _button(dialog, "saveButton").text() == t("settings.btn.save", lang="ru")
+    assert tray.show_action is not None
+    assert tray.show_action.text() == t("tray.action.show", lang="ru")
+    tray.deleteLater()

@@ -64,6 +64,7 @@ def test_children_and_i18n(dialog: SettingsDialog) -> None:
     assert _label(dialog, "rateLabel").text() == t("settings.field.rate")
     assert _label(dialog, "currencyLabel").text() == t("settings.field.currency")
     assert _label(dialog, "idleLabel").text() == t("settings.field.idle_threshold")
+    assert _label(dialog, "languageLabel").text() == t("settings.field.language")
     assert _button(dialog, "saveButton").text() == t("settings.btn.save")
     assert _button(dialog, "cancelButton").text() == t("settings.btn.cancel")
     assert _button(dialog, "historyButton").text() == t("settings.btn.history")
@@ -72,8 +73,8 @@ def test_children_and_i18n(dialog: SettingsDialog) -> None:
 
 
 def test_set_values_roundtrip(dialog: SettingsDialog) -> None:
-    dialog.set_values(12.5, "$", 120)
-    assert dialog.values() == ("12.5", "$", "120")
+    dialog.set_values(12.5, "$", 120, "ru")
+    assert dialog.values() == ("12.5", "$", "120", "ru")
 
 
 def test_show_and_clear_error(dialog: SettingsDialog) -> None:

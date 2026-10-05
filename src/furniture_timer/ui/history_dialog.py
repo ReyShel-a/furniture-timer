@@ -119,6 +119,14 @@ class HistoryDialog(QWidget):
     def place_near(self, widget_geo: QRect) -> None:
         _place_near(self, widget_geo)
 
+    def retranslate(self) -> None:
+        self.setWindowTitle(t("history.dialog.title"))
+        self._title.setText(t("history.dialog.title"))
+        self._table.setHorizontalHeaderLabels([t(key) for key in _COL_HEADERS])
+        self._empty.setText(t("history.empty"))
+        self._export.setText(t("history.btn.export"))
+        self._close.setText(t("history.btn.close"))
+
     def paintEvent(self, event: QPaintEvent) -> None:
         painter = QPainter(self)
         painter.fillRect(event.rect(), self._background)

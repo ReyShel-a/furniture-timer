@@ -42,6 +42,11 @@ class TimerWidget(QWidget):
         self.setWindowTitle(t("app.title"))
         self._drag_offset: QPoint | None = None
         self._background = background_color()
+        self._state = TimerState.IDLE
+        self._rate = DEFAULT_HOURLY_RATE
+        self._cost = 0.0
+        self._currency = DEFAULT_CURRENCY
+        self._start_ts: int | None = None
 
         self._time_label = self._make_label("timeLabel")
         self._price_label = self._make_label("priceLabel")
@@ -73,19 +78,35 @@ class TimerWidget(QWidget):
         self._time_label.setText(text)
 
     def show_price(self, rate: float, cost: float, currency: str) -> None:
+        self._rate = rate
+        self._cost = cost
+        self._currency = currency
         self._price_label.setText(
             t("widget.price_line", rate=rate, cost=cost, currency=currency)
         )
 
     def show_state(self, state: TimerState) -> None:
+        self._state = state
         self._start_pause_button.setText(t(_START_PAUSE_KEYS[state]))
         self._stop_button.setEnabled(state is not TimerState.IDLE)
 
     def show_session_start(self, ts: int | None) -> None:
+        self._start_ts = ts
         if ts is None:
             self.setToolTip(t("widget.tooltip.not_started"))
         else:
             self.setToolTip(t("widget.tooltip.started", time=format_clock(ts)))
+
+    def retranslate(self) -> None:
+        self.setWindowTitle(t("app.title"))
+        self._stop_button.setText(t("btn.stop"))
+        self._settings_button.setText(t("btn.settings.glyph"))
+        self._settings_button.setToolTip(t("btn.settings"))
+        self._close_button.setText(t("btn.close.glyph"))
+        self._close_button.setToolTip(t("btn.close"))
+        self.show_price(self._rate, self._cost, self._currency)
+        self.show_state(self._state)
+        self.show_session_start(self._start_ts)
 
     def paintEvent(self, event: QPaintEvent) -> None:
         painter = QPainter(self)

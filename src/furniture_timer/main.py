@@ -7,6 +7,7 @@ import sys
 from PySide6.QtWidgets import QApplication
 
 from furniture_timer import __version__, db, paths
+from furniture_timer.i18n import set_language
 from furniture_timer.idle import create_idle_detector
 from furniture_timer.logging_setup import setup_logging
 from furniture_timer.settings import Settings
@@ -31,10 +32,11 @@ def main() -> int:
     try:
         settings = Settings(conn)
         log.info(
-            "Settings loaded: rate=%s currency=%s idle_threshold=%ss",
+            "Settings loaded: rate=%s currency=%s idle_threshold=%ss language=%s",
             settings.hourly_rate,
             settings.currency,
             settings.idle_threshold_sec,
+            settings.language,
         )
         return _run_gui(settings, conn)
     finally:
@@ -59,6 +61,7 @@ def _persist_session(
 
 
 def _run_gui(settings: Settings, conn: sqlite3.Connection) -> int:
+    set_language(settings.language)
     app = QApplication.instance() or QApplication(sys.argv)
     widget = TimerWidget()
     model = TimerModel()
@@ -84,7 +87,7 @@ def _run_gui(settings: Settings, conn: sqlite3.Connection) -> int:
         parent=app,
     )
     settings_dialog = SettingsDialog(widget)
-    SettingsController(
+    settings_controller = SettingsController(
         settings,
         widget,
         settings_dialog,
@@ -101,6 +104,16 @@ def _run_gui(settings: Settings, conn: sqlite3.Connection) -> int:
         parent=app,
     )
     tray = TrayController(widget, timer_controller, parent=app)
+
+    def _retranslate() -> None:
+        widget.retranslate()
+        dialog.retranslate()
+        settings_dialog.retranslate()
+        history_dialog.retranslate()
+        tray.retranslate()
+        timer_controller.refresh()
+
+    settings_controller.language_changed.connect(_retranslate)
     if tray.active:
         app.setQuitOnLastWindowClosed(False)
         widget.close_clicked.connect(tray.hide_widget)

@@ -21,6 +21,15 @@ def qapp() -> QApplication:
 
 
 @pytest.fixture(autouse=True)
+def _reset_language() -> Iterator[None]:
+    from furniture_timer.i18n import set_language
+
+    set_language("en")
+    yield
+    set_language("en")
+
+
+@pytest.fixture(autouse=True)
 def _isolate_root_logging() -> Iterator[None]:
     root = logging.getLogger()
     before = list(root.handlers)

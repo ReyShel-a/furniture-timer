@@ -107,6 +107,14 @@ class TrayController(QObject):
         ):
             self.show_widget()
 
+    def retranslate(self) -> None:
+        if self._icon is None or self._show_action is None or self._quit_action is None:
+            return
+        self._icon.setToolTip(t("app.title"))
+        self._show_action.setText(t("tray.action.show"))
+        self._quit_action.setText(t("tray.action.quit"))
+        self._sync_toggle_label()
+
     def _sync_toggle_label(self) -> None:
         if self._toggle_action is None:
             return

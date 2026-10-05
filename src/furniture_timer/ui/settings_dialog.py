@@ -3,6 +3,7 @@
 from PySide6.QtCore import QRect, Qt, Signal
 from PySide6.QtGui import QKeyEvent, QPainter, QPaintEvent
 from PySide6.QtWidgets import (
+    QComboBox,
     QFormLayout,
     QHBoxLayout,
     QLabel,
@@ -12,7 +13,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from furniture_timer.i18n import t
+from furniture_timer.i18n import SUPPORTED_LANGS, t
 from furniture_timer.ui.placement import place_near as _place_near
 from furniture_timer.ui.theme import apply_theme, background_color
 from furniture_timer.ui.widget import WIDGET_WIDTH
@@ -43,22 +44,26 @@ class SettingsDialog(QWidget):
         self._rate_edit = self._make_edit("rateEdit")
         self._currency_edit = self._make_edit("currencyEdit")
         self._idle_edit = self._make_edit("idleEdit")
+        self._language = QComboBox(self)
+        self._language.setObjectName("languageCombo")
+        self._language.addItem(t("settings.lang.en"), SUPPORTED_LANGS[0])
+        self._language.addItem(t("settings.lang.ru"), SUPPORTED_LANGS[1])
         self._rate_edit.returnPressed.connect(self.save_clicked)
         self._currency_edit.returnPressed.connect(self.save_clicked)
         self._idle_edit.returnPressed.connect(self.save_clicked)
 
+        self._rate_label = self._make_label("rateLabel", t("settings.field.rate"))
+        self._currency_label = self._make_label("currencyLabel", t("settings.field.currency"))
+        self._idle_label = self._make_label("idleLabel", t("settings.field.idle_threshold"))
+        self._language_label = self._make_label("languageLabel", t("settings.field.language"))
+
         form = QFormLayout()
         form.setContentsMargins(0, 0, 0, 0)
         form.setSpacing(4)
-        form.addRow(self._make_label("rateLabel", t("settings.field.rate")), self._rate_edit)
-        form.addRow(
-            self._make_label("currencyLabel", t("settings.field.currency")),
-            self._currency_edit,
-        )
-        form.addRow(
-            self._make_label("idleLabel", t("settings.field.idle_threshold")),
-            self._idle_edit,
-        )
+        form.addRow(self._rate_label, self._rate_edit)
+        form.addRow(self._currency_label, self._currency_edit)
+        form.addRow(self._idle_label, self._idle_edit)
+        form.addRow(self._language_label, self._language)
 
         self._error = QLabel(self)
         self._error.setObjectName("errorLabel")
@@ -88,17 +93,40 @@ class SettingsDialog(QWidget):
         root.addWidget(self._history)
         apply_theme(self)
 
-    def set_values(self, rate: float, currency: str, idle_threshold_sec: int) -> None:
+    def set_values(
+        self, rate: float, currency: str, idle_threshold_sec: int, language: str
+    ) -> None:
         self._rate_edit.setText(str(rate))
         self._currency_edit.setText(currency)
         self._idle_edit.setText(str(idle_threshold_sec))
+        index = self._language.findData(language)
+        self._language.setCurrentIndex(index if index >= 0 else 0)
 
-    def values(self) -> tuple[str, str, str]:
+    def values(self) -> tuple[str, str, str, str]:
+        code = self._language.currentData()
         return (
             self._rate_edit.text(),
             self._currency_edit.text(),
             self._idle_edit.text(),
+            str(code) if code is not None else SUPPORTED_LANGS[0],
         )
+
+    def retranslate(self) -> None:
+        current = self._language.currentData()
+        self.setWindowTitle(t("settings.dialog.title"))
+        self._title.setText(t("settings.dialog.title"))
+        self._rate_label.setText(t("settings.field.rate"))
+        self._currency_label.setText(t("settings.field.currency"))
+        self._idle_label.setText(t("settings.field.idle_threshold"))
+        self._language_label.setText(t("settings.field.language"))
+        self._language.setItemText(0, t("settings.lang.en"))
+        self._language.setItemText(1, t("settings.lang.ru"))
+        index = self._language.findData(current)
+        if index >= 0:
+            self._language.setCurrentIndex(index)
+        self._save.setText(t("settings.btn.save"))
+        self._cancel.setText(t("settings.btn.cancel"))
+        self._history.setText(t("settings.btn.history"))
 
     def show_error(self, message: str) -> None:
         self._error.setText(message)

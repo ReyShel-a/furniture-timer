@@ -111,6 +111,21 @@ QLineEdit {{
 QLineEdit:focus {{
     border: 1px solid {ACCENT};
 }}
+QComboBox {{
+    color: {FG};
+    background-color: {SURFACE};
+    border: 1px solid {SURFACE_HOVER};
+    border-radius: 4px;
+    padding: 4px 6px;
+    font-size: 10pt;
+}}
+QComboBox QAbstractItemView {{
+    color: {FG};
+    background-color: {SURFACE};
+    selection-background-color: {ACCENT};
+    selection-color: {ON_COLOR};
+    border: 1px solid {SURFACE_HOVER};
+}}
 #errorLabel {{
     color: {DANGER};
     font-size: 9pt;
