@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from furniture_timer import db
 from furniture_timer.settings import (
     DEFAULT_CURRENCY,
     DEFAULT_HOURLY_RATE,
@@ -13,8 +14,8 @@ from furniture_timer.settings import (
 
 
 @pytest.fixture
-def conn() -> Iterator[sqlite3.Connection]:
-    connection = sqlite3.connect(":memory:")
+def conn(tmp_path: Path) -> Iterator[sqlite3.Connection]:
+    connection = db.connect(tmp_path / "db.sqlite")
     yield connection
     connection.close()
 
@@ -41,14 +42,14 @@ def test_save_and_load_roundtrip(conn: sqlite3.Connection) -> None:
 
 
 def test_persists_across_reopen(tmp_path: Path) -> None:
-    path = tmp_path / "db.sqlite"
-    first = sqlite3.connect(path)
+    path = tmp_path / "reopen.sqlite"
+    first = db.connect(path)
     settings = Settings(first)
     settings.hourly_rate = 0.1
     settings.save()
     first.close()
 
-    second = sqlite3.connect(path)
+    second = db.connect(path)
     try:
         assert Settings(second).hourly_rate == 0.1
     finally:
@@ -58,7 +59,6 @@ def test_persists_across_reopen(tmp_path: Path) -> None:
 def test_invalid_stored_values_fall_back_to_defaults(
     conn: sqlite3.Connection, caplog: pytest.LogCaptureFixture
 ) -> None:
-    Settings(conn)
     conn.executemany(
         "INSERT INTO settings (key, value) VALUES (?, ?)",
         [("hourly_rate", "abc"), ("currency", "   "), ("idle_threshold_sec", "0")],

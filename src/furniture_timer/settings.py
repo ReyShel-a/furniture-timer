@@ -41,13 +41,13 @@ def parse_idle_threshold(raw: str) -> int:
 
 
 class Settings:
-    """In-memory view of the settings table; call save() to persist changes."""
+    """In-memory view of the settings table; call save() to persist changes.
+
+    Expects a connection already migrated by db.connect().
+    """
 
     def __init__(self, conn: sqlite3.Connection) -> None:
         self._conn = conn
-        self._conn.execute(
-            "CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)"
-        )
         self._hourly_rate = DEFAULT_HOURLY_RATE
         self._currency = DEFAULT_CURRENCY
         self._idle_threshold_sec = DEFAULT_IDLE_THRESHOLD_SEC
