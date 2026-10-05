@@ -9,8 +9,13 @@ from furniture_timer import paths
 
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 HISTORY_LIMIT = 20
+
+_SESSION_COLUMNS = (
+    "id, start_ts, end_ts, active_seconds, idle_seconds, "
+    "rate_snapshot, cost, note, project_number, project_name, client_name"
+)
 
 # Timestamps are unix epoch seconds (UTC); durations are whole seconds.
 _MIGRATIONS: dict[int, str] = {
@@ -30,6 +35,11 @@ _MIGRATIONS: dict[int, str] = {
             value TEXT NOT NULL
         );
     """,
+    2: """
+        ALTER TABLE sessions ADD COLUMN project_number TEXT NOT NULL DEFAULT '';
+        ALTER TABLE sessions ADD COLUMN project_name   TEXT NOT NULL DEFAULT '';
+        ALTER TABLE sessions ADD COLUMN client_name    TEXT NOT NULL DEFAULT '';
+    """,
 }
 
 
@@ -46,6 +56,16 @@ class SessionRow(NamedTuple):
     rate_snapshot: float
     cost: float
     note: str
+    project_number: str
+    project_name: str
+    client_name: str
+
+
+class ProjectRef(NamedTuple):
+    """Latest stored name for one project number."""
+
+    number: str
+    name: str
 
 
 def connect(path: Path | None = None) -> sqlite3.Connection:
@@ -87,6 +107,9 @@ def insert_session(
     rate_snapshot: float,
     cost: float,
     note: str = "",
+    project_number: str = "",
+    project_name: str = "",
+    client_name: str = "",
 ) -> int:
     """Insert a finished session row. Returns the new row id."""
     with conn:
@@ -94,10 +117,21 @@ def insert_session(
             """
             INSERT INTO sessions (
                 start_ts, end_ts, active_seconds, idle_seconds,
-                rate_snapshot, cost, note
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                rate_snapshot, cost, note, project_number, project_name, client_name
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (start_ts, end_ts, active_seconds, idle_seconds, rate_snapshot, cost, note),
+            (
+                start_ts,
+                end_ts,
+                active_seconds,
+                idle_seconds,
+                rate_snapshot,
+                cost,
+                note,
+                project_number,
+                project_name,
+                client_name,
+            ),
         )
     row_id = cursor.lastrowid
     if row_id is None:
@@ -111,9 +145,8 @@ def list_recent_sessions(
     """Return the newest sessions first, at most *limit* rows (never negative)."""
     capped = max(0, int(limit))
     rows = conn.execute(
-        """
-        SELECT id, start_ts, end_ts, active_seconds, idle_seconds,
-               rate_snapshot, cost, note
+        f"""
+        SELECT {_SESSION_COLUMNS}
         FROM sessions
         ORDER BY id DESC
         LIMIT ?
@@ -121,3 +154,61 @@ def list_recent_sessions(
         (capped,),
     ).fetchall()
     return [SessionRow(*row) for row in rows]
+
+
+def list_known_projects(conn: sqlite3.Connection) -> list[ProjectRef]:
+    """Project numbers with the name from the newest session of that number."""
+    rows = conn.execute(
+        """
+        SELECT s.project_number, s.project_name
+        FROM sessions AS s
+        INNER JOIN (
+            SELECT project_number, MAX(id) AS max_id
+            FROM sessions
+            WHERE TRIM(project_number) != ''
+            GROUP BY project_number
+        ) AS latest ON s.id = latest.max_id
+        ORDER BY s.id DESC
+        """
+    ).fetchall()
+    return [ProjectRef(str(number), str(name)) for number, name in rows]
+
+
+def summarize_project(
+    conn: sqlite3.Connection,
+    project_number: str,
+    start_ts: int,
+    end_ts: int,
+) -> tuple[int, float]:
+    """Sum active time and cost for one project whose start falls in [start_ts, end_ts]."""
+    row = conn.execute(
+        """
+        SELECT COALESCE(SUM(active_seconds), 0), COALESCE(SUM(cost), 0.0)
+        FROM sessions
+        WHERE project_number = ? AND start_ts >= ? AND start_ts <= ?
+        """,
+        (project_number, start_ts, end_ts),
+    ).fetchone()
+    if row is None:
+        return (0, 0.0)
+    return (int(row[0]), float(row[1]))
+
+
+def clear_sessions(conn: sqlite3.Connection) -> None:
+    """Delete every stored session. Settings are left untouched."""
+    with conn:
+        conn.execute("DELETE FROM sessions")
+
+
+def list_known_clients(conn: sqlite3.Connection) -> list[str]:
+    """Distinct client names, newest appearance first. Blanks are skipped."""
+    rows = conn.execute(
+        """
+        SELECT client_name
+        FROM sessions
+        WHERE TRIM(client_name) != ''
+        GROUP BY client_name
+        ORDER BY MAX(id) DESC
+        """
+    ).fetchall()
+    return [str(row[0]) for row in rows]

@@ -1,11 +1,20 @@
 import logging
 import sqlite3
 from collections.abc import Iterator
+from datetime import datetime
 from pathlib import Path
 
 import pytest
-from PySide6.QtCore import QPoint
-from PySide6.QtWidgets import QApplication, QLabel, QPushButton, QTableWidget
+
+from PySide6.QtCore import QDate, QPoint
+from PySide6.QtWidgets import (
+    QApplication,
+    QComboBox,
+    QDateEdit,
+    QLabel,
+    QPushButton,
+    QTableWidget,
+)
 
 from furniture_timer import db
 from furniture_timer.formatting import format_datetime, format_hms
@@ -14,7 +23,11 @@ from furniture_timer.main import _persist_session
 from furniture_timer.session_csv import CSV_COLUMNS
 from furniture_timer.timer_model import TimerModel, TimerState
 from furniture_timer.ui.controller import TimerController
-from furniture_timer.ui.history_controller import GetSavePath, HistoryController
+from furniture_timer.ui.history_controller import (
+    GetSavePath,
+    HistoryController,
+    sort_sessions_by_project,
+)
 from furniture_timer.ui.history_dialog import HistoryDialog
 from furniture_timer.ui.settings_dialog import SettingsDialog
 from furniture_timer.ui.widget import TimerWidget
@@ -188,6 +201,9 @@ def test_open_lists_recent_sessions(
     assert table.item(0, 0).text() == format_datetime(300)
     assert table.item(0, 1).text() == format_hms(120)
     assert table.item(0, 2).text() == "10.00"
+    assert table.item(0, 3).text() == ""
+    assert table.item(0, 4).text() == ""
+    assert table.item(0, 5).text() == ""
     assert table.item(1, 0).text() == format_datetime(100)
     assert table.item(1, 1).text() == format_hms(60)
     assert table.item(1, 2).text() == "0.50"
@@ -213,6 +229,113 @@ def test_stop_refreshes_visible_history(
     assert table.item(0, 0).text() == format_datetime(int(WALL_START))
     assert table.item(0, 1).text() == format_hms(1800)
     assert table.item(0, 2).text() == "10.00"
+
+
+def test_open_shows_project_and_client(
+    controller: HistoryController, dialog: HistoryDialog, conn: sqlite3.Connection
+) -> None:
+    db.insert_session(
+        conn,
+        100,
+        160,
+        60,
+        0,
+        20.0,
+        0.5,
+        project_number="12",
+        project_name="Kitchen",
+        client_name="Ivan",
+    )
+    controller.open()
+    table = _table(dialog)
+    assert table.item(0, 3).text() == "12"
+    assert table.item(0, 4).text() == "Kitchen"
+    assert table.item(0, 5).text() == "Ivan"
+
+
+def test_clear_removes_sessions_and_shows_empty(
+    controller: HistoryController,
+    dialog: HistoryDialog,
+    widget: TimerWidget,
+    conn: sqlite3.Connection,
+) -> None:
+    db.insert_session(
+        conn, 100, 160, 60, 0, 20.0, 0.5, project_number="12", client_name="Ivan"
+    )
+    with conn:
+        conn.execute("INSERT INTO settings (key, value) VALUES ('hourly_rate', '20')")
+    widget.set_job_suggestions([("12", "Kitchen")], ["Ivan"])
+    controller.open()
+    assert _button(dialog, "clearButton").isEnabled()
+    _button(dialog, "clearButton").click()
+    assert db.list_recent_sessions(conn) == []
+    assert conn.execute("SELECT value FROM settings WHERE key = 'hourly_rate'").fetchone() == (
+        "20",
+    )
+    assert _empty(dialog).isVisible()
+    assert _table(dialog).isHidden()
+    assert not _button(dialog, "clearButton").isEnabled()
+    assert not _button(dialog, "exportButton").isEnabled()
+    number = widget.findChild(QComboBox, "projectNumberCombo")
+    assert number is not None
+    assert number.count() == 0
+
+
+def _session(row_id: int, number: str) -> db.SessionRow:
+    return db.SessionRow(row_id, row_id, row_id, 1, 0, 0.0, 1.0, "", number, "", "")
+
+
+def test_sort_project_numbers_numeric_blank_and_direction() -> None:
+    rows = [_session(1, "12"), _session(2, ""), _session(3, "7"), _session(4, "7")]
+    ascending = sort_sessions_by_project(rows, descending=False)
+    assert [row.id for row in ascending] == [4, 3, 1, 2]
+    descending = sort_sessions_by_project(rows, descending=True)
+    assert [row.id for row in descending] == [1, 4, 3, 2]
+
+
+def test_header_sort_reorders_visible_rows(
+    controller: HistoryController, dialog: HistoryDialog, conn: sqlite3.Connection
+) -> None:
+    db.insert_session(conn, 1, 2, 1, 0, 0.0, 0.0, project_number="12")
+    db.insert_session(conn, 3, 4, 1, 0, 0.0, 0.0, project_number="")
+    db.insert_session(conn, 5, 6, 1, 0, 0.0, 0.0, project_number="7")
+    db.insert_session(conn, 7, 8, 1, 0, 0.0, 0.0, project_number="7")
+    controller.open()
+    header = _table(dialog).horizontalHeader()
+    header.sectionClicked.emit(3)
+    assert [_table(dialog).item(row, 3).text() for row in range(4)] == ["7", "7", "12", ""]
+    header.sectionClicked.emit(3)
+    assert [_table(dialog).item(row, 3).text() for row in range(4)] == ["12", "7", "7", ""]
+
+
+def test_summary_follows_project_and_period(
+    controller: HistoryController, dialog: HistoryDialog, conn: sqlite3.Connection
+) -> None:
+    inside = datetime.now().replace(day=1, hour=12, minute=0, second=0, microsecond=0)
+    outside = inside.replace(year=inside.year - 1)
+    db.insert_session(
+        conn, int(inside.timestamp()), int(inside.timestamp()) + 10, 3600, 0, 0.0, 10.0, project_number="7"
+    )
+    db.insert_session(
+        conn, int(outside.timestamp()), int(outside.timestamp()) + 10, 100, 0, 0.0, 99.0, project_number="7"
+    )
+    db.insert_session(
+        conn, int(inside.timestamp()), int(inside.timestamp()) + 10, 50, 0, 0.0, 5.0, project_number="12"
+    )
+    controller.open()
+    summary = dialog.findChild(QLabel, "summaryLabel")
+    project = dialog.findChild(QComboBox, "summaryProject")
+    assert summary is not None and project is not None
+    assert summary.text() == t("history.summary.pick")
+    project.setCurrentIndex(project.findData("7"))
+    assert summary.text() == t("history.summary.total", time=format_hms(3600), cost=10.0)
+    past = QDate(outside.year, outside.month, outside.day)
+    period_from = dialog.findChild(QDateEdit, "periodFrom")
+    period_to = dialog.findChild(QDateEdit, "periodTo")
+    assert period_from is not None and period_to is not None
+    period_from.setDate(past)
+    period_to.setDate(past)
+    assert summary.text() == t("history.summary.total", time=format_hms(100), cost=99.0)
 
 
 def test_export_writes_chosen_path(

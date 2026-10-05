@@ -94,6 +94,19 @@ QPushButton:disabled {{
     color: {ON_COLOR};
     background-color: {DANGER};
 }}
+#clearButton {{
+    color: {ON_COLOR};
+    background-color: {DANGER};
+}}
+#clearButton:hover {{
+    background-color: {DANGER_HOVER};
+}}
+#clearButton:disabled {{
+    color: {DANGER_MUTED};
+    background-color: {SURFACE};
+    border: 1px solid {DANGER};
+    padding: 3px 7px;
+}}
 QToolTip {{
     color: {FG};
     background-color: {SURFACE};
@@ -110,6 +123,18 @@ QLineEdit {{
 }}
 QLineEdit:focus {{
     border: 1px solid {ACCENT};
+}}
+QDateEdit {{
+    color: {FG};
+    background-color: {SURFACE};
+    border: 1px solid {SURFACE_HOVER};
+    border-radius: 4px;
+    padding: 2px 4px;
+    font-size: 9pt;
+}}
+QDateEdit::drop-down {{
+    border: none;
+    width: 16px;
 }}
 QComboBox {{
     color: {FG};

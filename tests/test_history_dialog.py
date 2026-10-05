@@ -6,8 +6,8 @@ from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QLabel, QPushButton, QTableWidget
 
 from furniture_timer.i18n import t
-from furniture_timer.ui.history_dialog import HistoryDialog
-from furniture_timer.ui.widget import TimerWidget, WIDGET_WIDTH
+from furniture_timer.ui.widget import TimerWidget
+from furniture_timer.ui.history_dialog import HISTORY_WIDTH, HistoryDialog
 
 
 @pytest.fixture
@@ -54,7 +54,7 @@ def test_window_flags(dialog: HistoryDialog) -> None:
     assert not (flags & Qt.WindowType.WindowDoesNotAcceptFocus)
     assert not dialog.testAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
     assert dialog.windowModality() == Qt.WindowModality.NonModal
-    assert dialog.width() == WIDGET_WIDTH
+    assert dialog.width() == HISTORY_WIDTH
 
 
 def test_children_and_i18n(dialog: HistoryDialog) -> None:
@@ -63,12 +63,16 @@ def test_children_and_i18n(dialog: HistoryDialog) -> None:
     assert _label(dialog, "historyTitle").text() == t("history.dialog.title")
     assert _label(dialog, "emptyLabel").text() == t("history.empty")
     assert _button(dialog, "exportButton").text() == t("history.btn.export")
+    assert _button(dialog, "clearButton").text() == t("history.btn.clear")
     assert _button(dialog, "closeButton").text() == t("history.btn.close")
     table = _table(dialog)
-    assert [table.horizontalHeaderItem(i).text() for i in range(3) if table.horizontalHeaderItem(i) is not None] == [
+    assert [table.horizontalHeaderItem(i).text() for i in range(table.columnCount())] == [
         t("history.col.start"),
         t("history.col.active"),
         t("history.col.cost"),
+        t("history.col.project_number"),
+        t("history.col.project_name"),
+        t("history.col.client"),
     ]
 
 
@@ -76,21 +80,27 @@ def test_initial_empty_state(dialog: HistoryDialog) -> None:
     assert not _label(dialog, "emptyLabel").isHidden()
     assert _table(dialog).isHidden()
     assert not _button(dialog, "exportButton").isEnabled()
+    assert not _button(dialog, "clearButton").isEnabled()
     assert _label(dialog, "errorLabel").isHidden()
 
 
 def test_set_rows_and_empty_toggle(dialog: HistoryDialog) -> None:
-    dialog.set_rows([("2026-10-05 09:07", "00:30:00", "10.00")])
+    dialog.set_rows([("2026-10-05 09:07", "00:30:00", "10.00", "12", "Kitchen", "Ivan")])
     dialog.show_empty(False)
     dialog.set_export_enabled(True)
     table = _table(dialog)
     assert not table.isHidden()
     assert _label(dialog, "emptyLabel").isHidden()
     assert table.rowCount() == 1
-    start, active, cost = table.item(0, 0), table.item(0, 1), table.item(0, 2)
-    assert start is not None and start.text() == "2026-10-05 09:07"
-    assert active is not None and active.text() == "00:30:00"
-    assert cost is not None and cost.text() == "10.00"
+    cells = [table.item(0, column) for column in range(6)]
+    assert [cell.text() if cell is not None else None for cell in cells] == [
+        "2026-10-05 09:07",
+        "00:30:00",
+        "10.00",
+        "12",
+        "Kitchen",
+        "Ivan",
+    ]
     assert _button(dialog, "exportButton").isEnabled()
 
     dialog.set_rows([])
@@ -113,14 +123,26 @@ def test_show_and_clear_error(dialog: HistoryDialog) -> None:
     assert error.text() == ""
 
 
+def test_project_header_requests_sort(dialog: HistoryDialog) -> None:
+    fired: list[str] = []
+    dialog.sort_clicked.connect(lambda: fired.append("sort"))
+    header = _table(dialog).horizontalHeader()
+    header.sectionClicked.emit(0)
+    header.sectionClicked.emit(3)
+    assert fired == ["sort"]
+
+
 def test_export_and_close_signals(dialog: HistoryDialog) -> None:
     fired: list[str] = []
     dialog.export_clicked.connect(lambda: fired.append("export"))
+    dialog.clear_clicked.connect(lambda: fired.append("clear"))
     dialog.close_clicked.connect(lambda: fired.append("close"))
     dialog.set_export_enabled(True)
+    dialog.set_clear_enabled(True)
     _button(dialog, "exportButton").click()
+    _button(dialog, "clearButton").click()
     _button(dialog, "closeButton").click()
-    assert fired == ["export", "close"]
+    assert fired == ["export", "clear", "close"]
 
 
 def test_escape_emits_close(dialog: HistoryDialog) -> None:

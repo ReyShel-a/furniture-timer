@@ -1,8 +1,10 @@
 """Frameless always-on-top timer widget (passive view, no business logic)."""
 
+from collections.abc import Sequence
+
 from PySide6.QtCore import QPoint, Qt, Signal
 from PySide6.QtGui import QMouseEvent, QMoveEvent, QPainter, QPaintEvent
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from furniture_timer.formatting import format_clock, format_hms
 from furniture_timer.i18n import t
@@ -12,8 +14,9 @@ from furniture_timer.ui.outlined_label import OutlinedLabel
 from furniture_timer.ui.theme import apply_theme, background_color
 
 WIDGET_WIDTH = 260
-WIDGET_HEIGHT = 150
+WIDGET_HEIGHT = 248
 GLYPH_BUTTON_WIDTH = 28
+_COMBO_HEIGHT = 24
 
 _START_PAUSE_KEYS: dict[TimerState, str] = {
     TimerState.IDLE: "btn.start",
@@ -47,6 +50,13 @@ class TimerWidget(QWidget):
         self._cost = 0.0
         self._currency = DEFAULT_CURRENCY
         self._start_ts: int | None = None
+        self._projects: list[tuple[str, str]] = []
+
+        self._number_combo = self._make_combo("projectNumberCombo")
+        self._name_combo = self._make_combo("projectNameCombo")
+        self._client_combo = self._make_combo("clientNameCombo")
+        self._number_combo.activated[int].connect(self._on_number_picked)
+        self._name_combo.activated[int].connect(self._on_name_picked)
 
         self._time_label = self._make_label("timeLabel")
         self._price_label = self._make_label("priceLabel")
@@ -73,6 +83,32 @@ class TimerWidget(QWidget):
         self.show_price(DEFAULT_HOURLY_RATE, 0.0, DEFAULT_CURRENCY)
         self.show_state(TimerState.IDLE)
         self.show_session_start(None)
+        self._apply_placeholders()
+
+    def job(self) -> tuple[str, str, str]:
+        """Current project number, project name, and client, trimmed."""
+        return (
+            self._number_combo.currentText().strip(),
+            self._name_combo.currentText().strip(),
+            self._client_combo.currentText().strip(),
+        )
+
+    def set_job_suggestions(
+        self,
+        projects: Sequence[tuple[str, str]],
+        clients: Sequence[str],
+    ) -> None:
+        """Replace dropdown choices. Typed text stays as the user left it."""
+        self._projects = [(number, name) for number, name in projects]
+        names: list[str] = []
+        seen: set[str] = set()
+        for _number, name in self._projects:
+            if name and name not in seen:
+                seen.add(name)
+                names.append(name)
+        self._fill_combo(self._number_combo, [number for number, _name in self._projects])
+        self._fill_combo(self._name_combo, names)
+        self._fill_combo(self._client_combo, list(clients))
 
     def show_time(self, text: str) -> None:
         self._time_label.setText(text)
@@ -107,6 +143,7 @@ class TimerWidget(QWidget):
         self.show_price(self._rate, self._cost, self._currency)
         self.show_state(self._state)
         self.show_session_start(self._start_ts)
+        self._apply_placeholders()
 
     def paintEvent(self, event: QPaintEvent) -> None:
         painter = QPainter(self)
@@ -152,6 +189,63 @@ class TimerWidget(QWidget):
             button.setToolTip(tooltip)
         return button
 
+    def _on_number_picked(self, index: int) -> None:
+        number = self._picked_text(self._number_combo, index)
+        if number is None:
+            return
+        for known, name in self._projects:
+            if known == number:
+                self._set_combo_text(self._name_combo, name)
+                return
+
+    def _on_name_picked(self, index: int) -> None:
+        name = self._picked_text(self._name_combo, index)
+        if name is None:
+            return
+        matches = [number for number, known in self._projects if known == name]
+        if len(matches) == 1:
+            self._set_combo_text(self._number_combo, matches[0])
+
+    def _picked_text(self, combo: QComboBox, index: int) -> str | None:
+        if index < 0:
+            return None
+        text = combo.itemText(index)
+        if text != combo.currentText():
+            return None
+        return text
+
+    def _apply_placeholders(self) -> None:
+        self._set_placeholder(self._number_combo, t("widget.field.project_number"))
+        self._set_placeholder(self._name_combo, t("widget.field.project_name"))
+        self._set_placeholder(self._client_combo, t("widget.field.client"))
+
+    def _set_placeholder(self, combo: QComboBox, text: str) -> None:
+        line = combo.lineEdit()
+        if line is not None:
+            line.setPlaceholderText(text)
+
+    def _set_combo_text(self, combo: QComboBox, text: str) -> None:
+        combo.blockSignals(True)
+        combo.setEditText(text)
+        combo.blockSignals(False)
+
+    def _fill_combo(self, combo: QComboBox, items: list[str]) -> None:
+        current = combo.currentText()
+        combo.blockSignals(True)
+        combo.clear()
+        combo.addItems(items)
+        combo.setEditText(current)
+        combo.blockSignals(False)
+
+    def _make_combo(self, name: str) -> QComboBox:
+        combo = QComboBox(self)
+        combo.setObjectName(name)
+        combo.setEditable(True)
+        combo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+        combo.setMaxVisibleItems(8)
+        combo.setFixedHeight(_COMBO_HEIGHT)
+        return combo
+
     def _build_layout(self) -> None:
         buttons = QHBoxLayout()
         buttons.setSpacing(4)
@@ -163,6 +257,9 @@ class TimerWidget(QWidget):
         root = QVBoxLayout(self)
         root.setContentsMargins(10, 8, 10, 10)
         root.setSpacing(4)
+        root.addWidget(self._number_combo)
+        root.addWidget(self._name_combo)
+        root.addWidget(self._client_combo)
         root.addWidget(self._time_label)
         root.addWidget(self._price_label)
         root.addLayout(buttons)

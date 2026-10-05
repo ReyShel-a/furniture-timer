@@ -3,7 +3,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from PySide6.QtWidgets import QApplication, QPushButton
+from PySide6.QtWidgets import QApplication, QComboBox, QPushButton
 
 from furniture_timer import db
 from furniture_timer.main import _persist_session
@@ -171,6 +171,72 @@ def test_persist_failure_still_resets_ui(
         assert not stop_button.isEnabled()
     finally:
         controller.deleteLater()
+
+
+def test_stop_writes_project_and_client(
+    model: TimerModel,
+    widget: TimerWidget,
+    conn: sqlite3.Connection,
+) -> None:
+    controller = TimerController(
+        model,
+        widget,
+        hourly_rate=lambda: RATE,
+        persist_session=lambda result, rate, cost: _persist_session(
+            conn, result, rate, cost, *widget.job()
+        ),
+    )
+    try:
+        for name, text in (
+            ("projectNumberCombo", "12"),
+            ("projectNameCombo", "Kitchen"),
+            ("clientNameCombo", "Ivan"),
+        ):
+            combo = widget.findChild(QComboBox, name)
+            assert combo is not None, name
+            combo.setEditText(text)
+        _click(widget, "startPauseButton")
+        _click(widget, "stopButton")
+    finally:
+        controller.deleteLater()
+
+    row = conn.execute(
+        "SELECT project_number, project_name, client_name FROM sessions"
+    ).fetchone()
+    assert row == ("12", "Kitchen", "Ivan")
+
+
+def test_number_choice_fills_latest_name(widget: TimerWidget) -> None:
+    widget.set_job_suggestions([("12", "Wardrobe"), ("7", "Kitchen")], ["Ivan"])
+    number = widget.findChild(QComboBox, "projectNumberCombo")
+    name = widget.findChild(QComboBox, "projectNameCombo")
+    assert number is not None and name is not None
+    index = number.findText("12")
+    number.setCurrentIndex(index)
+    number.activated[int].emit(index)
+    assert name.currentText() == "Wardrobe"
+
+
+def test_unique_name_choice_fills_number(widget: TimerWidget) -> None:
+    widget.set_job_suggestions([("12", "Wardrobe"), ("7", "Kitchen")], ["Ivan"])
+    number = widget.findChild(QComboBox, "projectNumberCombo")
+    name = widget.findChild(QComboBox, "projectNameCombo")
+    assert number is not None and name is not None
+    index = name.findText("Kitchen")
+    name.setCurrentIndex(index)
+    name.activated[int].emit(index)
+    assert number.currentText() == "7"
+
+
+def test_shared_name_does_not_change_number(widget: TimerWidget) -> None:
+    widget.set_job_suggestions([("12", "Kitchen"), ("7", "Kitchen")], [])
+    number = widget.findChild(QComboBox, "projectNumberCombo")
+    name = widget.findChild(QComboBox, "projectNameCombo")
+    assert number is not None and name is not None
+    number.setEditText("kept")
+    name.setCurrentIndex(0)
+    name.activated[int].emit(0)
+    assert number.currentText() == "kept"
 
 
 def test_main_persist_helper_inserts_row(tmp_path: Path) -> None:

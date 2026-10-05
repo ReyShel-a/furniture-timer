@@ -48,6 +48,9 @@ def _persist_session(
     result: SessionResult,
     rate_snapshot: float,
     cost: float,
+    project_number: str = "",
+    project_name: str = "",
+    client_name: str = "",
 ) -> None:
     db.insert_session(
         conn,
@@ -57,7 +60,17 @@ def _persist_session(
         idle_seconds=result.idle_seconds,
         rate_snapshot=rate_snapshot,
         cost=cost,
+        project_number=project_number,
+        project_name=project_name,
+        client_name=client_name,
     )
+
+
+def _load_job_suggestions(conn: sqlite3.Connection, widget: TimerWidget) -> None:
+    try:
+        widget.set_job_suggestions(db.list_known_projects(conn), db.list_known_clients(conn))
+    except Exception:
+        log.exception("Failed to load project suggestions")
 
 
 def _run_gui(settings: Settings, conn: sqlite3.Connection) -> int:
@@ -71,7 +84,7 @@ def _run_gui(settings: Settings, conn: sqlite3.Connection) -> int:
         hourly_rate=lambda: settings.hourly_rate,
         currency=lambda: settings.currency,
         persist_session=lambda result, rate, cost: _persist_session(
-            conn, result, rate, cost
+            conn, result, rate, cost, *widget.job()
         ),
         parent=app,
     )
@@ -113,6 +126,10 @@ def _run_gui(settings: Settings, conn: sqlite3.Connection) -> int:
         tray.retranslate()
         timer_controller.refresh()
 
+    _load_job_suggestions(conn, widget)
+    timer_controller.state_changed.connect(
+        lambda: _load_job_suggestions(conn, widget)
+    )
     settings_controller.language_changed.connect(_retranslate)
     if tray.active:
         app.setQuitOnLastWindowClosed(False)

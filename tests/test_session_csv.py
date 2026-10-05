@@ -16,6 +16,9 @@ def test_csv_columns_match_session_row() -> None:
         "rate_snapshot",
         "cost",
         "note",
+        "project_number",
+        "project_name",
+        "client_name",
     )
 
 
@@ -43,7 +46,8 @@ def test_write_sessions_csv_utf8_sig_headers_and_values(tmp_path: Path) -> None:
     for line, row in zip(lines[1:], rows, strict=True):
         expected = (
             f"{row.id},{row.start_ts},{row.end_ts},{row.active_seconds},"
-            f"{row.idle_seconds},{row.rate_snapshot},{row.cost},{row.note}"
+            f"{row.idle_seconds},{row.rate_snapshot},{row.cost},{row.note},"
+            f"{row.project_number},{row.project_name},{row.client_name}"
         )
         assert line == expected
 

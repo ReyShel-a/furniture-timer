@@ -4,12 +4,12 @@ from datetime import datetime
 import pytest
 from PySide6.QtCore import QEvent, QPoint, QPointF, QSize, Qt
 from PySide6.QtGui import QMouseEvent
-from PySide6.QtWidgets import QApplication, QLabel, QPushButton
+from PySide6.QtWidgets import QApplication, QComboBox, QLabel, QPushButton
 
 from furniture_timer.i18n import _STRINGS, t
 from furniture_timer.timer_model import TimerState
 from furniture_timer.ui.outlined_label import OutlinedLabel
-from furniture_timer.ui.widget import TimerWidget
+from furniture_timer.ui.widget import WIDGET_HEIGHT, WIDGET_WIDTH, TimerWidget
 
 USED_KEYS = [
     "app.title",
@@ -24,6 +24,9 @@ USED_KEYS = [
     "widget.price_line",
     "widget.tooltip.started",
     "widget.tooltip.not_started",
+    "widget.field.project_number",
+    "widget.field.project_name",
+    "widget.field.client",
     "idle.dialog.title",
     "idle.dialog.message",
     "idle.prompt.message",
@@ -51,12 +54,22 @@ USED_KEYS = [
     "history.col.start",
     "history.col.active",
     "history.col.cost",
+    "history.col.project_number",
+    "history.col.project_name",
+    "history.col.client",
     "history.empty",
     "history.btn.export",
+    "history.btn.clear",
     "history.btn.close",
     "history.export.title",
     "history.export.filter",
     "history.error.write",
+    "history.error.clear",
+    "history.error.summary",
+    "history.summary.pick",
+    "history.summary.total",
+    "history.period.from",
+    "history.period.to",
     "tray.action.show",
     "tray.action.quit",
 ]
@@ -91,7 +104,7 @@ def test_window_flags(widget: TimerWidget) -> None:
 
 
 def test_fixed_size(widget: TimerWidget) -> None:
-    assert widget.minimumSize() == widget.maximumSize() == QSize(260, 150)
+    assert widget.minimumSize() == widget.maximumSize() == QSize(WIDGET_WIDTH, WIDGET_HEIGHT)
 
 
 def test_children_have_object_names(widget: TimerWidget) -> None:
