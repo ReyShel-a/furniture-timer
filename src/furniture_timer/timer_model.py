@@ -43,6 +43,15 @@ class SessionResult:
     idle_seconds: int
 
 
+@dataclass(frozen=True)
+class TimerSnapshot:
+    """Consistent view of the model at a single clock reading."""
+
+    state: TimerState
+    active_seconds: float
+    start_ts: int | None
+
+
 class TimerModel:
     def __init__(
         self,
@@ -87,6 +96,14 @@ class TimerModel:
         if self._state is not TimerState.AUTO_PAUSED:
             return None
         return self._clock() - self._idle_start
+
+    def snapshot(self) -> TimerSnapshot:
+        """Read-only view for a UI tick; never changes state."""
+        return TimerSnapshot(
+            state=self._state,
+            active_seconds=self.active_seconds,
+            start_ts=self._start_ts,
+        )
 
     def start(self) -> None:
         self._require(TimerState.IDLE, op="start")

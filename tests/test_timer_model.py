@@ -1,9 +1,14 @@
+import dataclasses
+import inspect
+
 import pytest
 
+from furniture_timer import timer_model
 from furniture_timer.timer_model import (
     IdleChoice,
     InvalidTransition,
     TimerModel,
+    TimerSnapshot,
     TimerState,
 )
 
@@ -230,3 +235,52 @@ def test_new_session_after_stop_starts_clean(model: TimerModel, clock: FakeClock
     assert model.active_seconds == 7
     assert model.idle_seconds == 0
     assert model.start_ts == int(WALL_START + clock.now - 7)
+
+
+def test_snapshot_idle(model: TimerModel) -> None:
+    assert model.snapshot() == TimerSnapshot(TimerState.IDLE, 0.0, None)
+
+
+def test_snapshot_running(model: TimerModel, clock: FakeClock) -> None:
+    model.start()
+    clock.advance(12.7)
+
+    snap = model.snapshot()
+    assert snap.state is TimerState.RUNNING
+    assert snap.active_seconds == pytest.approx(12.7)
+    assert snap.start_ts == int(WALL_START)
+
+
+def test_snapshot_frozen_while_paused(model: TimerModel, clock: FakeClock) -> None:
+    model.start()
+    clock.advance(30)
+    model.pause()
+    before = model.snapshot()
+    clock.advance(500)
+
+    assert model.snapshot() == before
+    assert before.state is TimerState.PAUSED
+    assert before.active_seconds == 30
+
+
+def test_snapshot_auto_paused_matches_rollback(model: TimerModel, clock: FakeClock) -> None:
+    _auto_paused_example(model, clock)
+
+    snap = model.snapshot()
+    assert snap.state is TimerState.AUTO_PAUSED
+    assert snap.active_seconds == model.active_seconds == 100
+
+
+def test_snapshot_is_pure_and_immutable(model: TimerModel, clock: FakeClock) -> None:
+    model.start()
+    clock.advance(5)
+
+    first = model.snapshot()
+    assert model.snapshot() == first
+    assert model.state is TimerState.RUNNING
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        first.active_seconds = 0.0  # type: ignore[misc]
+
+
+def test_model_has_no_qt_imports() -> None:
+    assert "PySide6" not in inspect.getsource(timer_model)

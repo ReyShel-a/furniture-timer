@@ -8,6 +8,8 @@ from PySide6.QtWidgets import QApplication
 from furniture_timer import __version__, db, paths
 from furniture_timer.logging_setup import setup_logging
 from furniture_timer.settings import Settings
+from furniture_timer.timer_model import TimerModel
+from furniture_timer.ui.controller import TimerController
 from furniture_timer.ui.widget import TimerWidget
 
 log = logging.getLogger(__name__)
@@ -34,6 +36,7 @@ def _run_gui(settings: Settings) -> int:
     app = QApplication.instance() or QApplication(sys.argv)
     widget = TimerWidget()
     widget.show_price(settings.hourly_rate, 0.0, settings.currency)
+    TimerController(TimerModel(), widget, parent=app)
     widget.close_clicked.connect(app.quit)
     widget.show()
     exit_code = app.exec()
