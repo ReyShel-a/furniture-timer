@@ -9,12 +9,19 @@ from PySide6.QtCore import QObject, Qt, QTimer, Signal
 from furniture_timer.cost import live_cost
 from furniture_timer.formatting import format_hms
 from furniture_timer.settings import DEFAULT_CURRENCY, DEFAULT_HOURLY_RATE
-from furniture_timer.timer_model import TimerModel, TimerSnapshot, TimerState
+from furniture_timer.timer_model import (
+    SessionResult,
+    TimerModel,
+    TimerSnapshot,
+    TimerState,
+)
 from furniture_timer.ui.widget import TimerWidget
 
 log = logging.getLogger(__name__)
 
 TICK_INTERVAL_MS: Final[int] = 1000
+
+PersistSession = Callable[[SessionResult, float, float], None]
 
 
 class TimerController(QObject):
@@ -26,6 +33,7 @@ class TimerController(QObject):
         widget: TimerWidget,
         hourly_rate: Callable[[], float] = lambda: DEFAULT_HOURLY_RATE,
         currency: Callable[[], str] = lambda: DEFAULT_CURRENCY,
+        persist_session: PersistSession | None = None,
         interval_ms: int = TICK_INTERVAL_MS,
         parent: QObject | None = None,
     ) -> None:
@@ -34,6 +42,7 @@ class TimerController(QObject):
         self._widget = widget
         self._hourly_rate = hourly_rate
         self._currency = currency
+        self._persist_session = persist_session
         self._timer = QTimer(self)
         self._timer.setInterval(interval_ms)
         self._timer.setTimerType(Qt.TimerType.PreciseTimer)
@@ -59,11 +68,20 @@ class TimerController(QObject):
         if self._model.state is TimerState.IDLE:
             return
         result = self._model.stop()
+        rate = self._hourly_rate()
+        cost = live_cost(result.active_seconds, rate)
         log.info(
-            "Session stopped: active=%ss idle=%ss",
+            "Session stopped: active=%ss idle=%ss rate=%s cost=%s",
             result.active_seconds,
             result.idle_seconds,
+            rate,
+            cost,
         )
+        if self._persist_session is not None:
+            try:
+                self._persist_session(result, rate, cost)
+            except Exception:
+                log.exception("Failed to persist session")
         self.refresh()
 
     def refresh(self) -> None:

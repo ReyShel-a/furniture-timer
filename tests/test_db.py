@@ -72,3 +72,53 @@ def test_newer_schema_is_rejected(tmp_path: Path) -> None:
 
     with pytest.raises(db.SchemaVersionError):
         db.connect(path)
+
+
+def _session_row(conn: sqlite3.Connection, row_id: int) -> tuple[object, ...]:
+    return conn.execute(
+        "SELECT id, start_ts, end_ts, active_seconds, idle_seconds, "
+        "rate_snapshot, cost, note FROM sessions WHERE id = ?",
+        (row_id,),
+    ).fetchone()
+
+
+def test_insert_session_writes_all_columns(tmp_path: Path) -> None:
+    conn = db.connect(tmp_path / "db.sqlite")
+    try:
+        row_id = db.insert_session(
+            conn,
+            start_ts=1000,
+            end_ts=2800,
+            active_seconds=1800,
+            idle_seconds=120,
+            rate_snapshot=20.0,
+            cost=10.0,
+            note="cut list",
+        )
+        assert row_id == 1
+        assert _session_row(conn, row_id) == (
+            1,
+            1000,
+            2800,
+            1800,
+            120,
+            20.0,
+            10.0,
+            "cut list",
+        )
+    finally:
+        conn.close()
+
+
+def test_insert_session_defaults_note_and_appends_rows(tmp_path: Path) -> None:
+    conn = db.connect(tmp_path / "db.sqlite")
+    try:
+        first = db.insert_session(conn, 1, 2, 0, 0, 0.0, 0.0)
+        second = db.insert_session(conn, 10, 20, 5, 1, 50.0, 10.0)
+        assert first == 1
+        assert second == 2
+        assert conn.execute("SELECT COUNT(*) FROM sessions").fetchone() == (2,)
+        assert _session_row(conn, first)[7] == ""
+        assert _session_row(conn, second) == (2, 10, 20, 5, 1, 50.0, 10.0, "")
+    finally:
+        conn.close()

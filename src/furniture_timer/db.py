@@ -63,3 +63,30 @@ def migrate(conn: sqlite3.Connection) -> None:
             f"BEGIN;\n{_MIGRATIONS[version]}\nPRAGMA user_version = {version};\nCOMMIT;"
         )
         log.info("Migrated database schema to v%d", version)
+
+
+def insert_session(
+    conn: sqlite3.Connection,
+    start_ts: int,
+    end_ts: int,
+    active_seconds: int,
+    idle_seconds: int,
+    rate_snapshot: float,
+    cost: float,
+    note: str = "",
+) -> int:
+    """Insert a finished session row. Returns the new row id."""
+    with conn:
+        cursor = conn.execute(
+            """
+            INSERT INTO sessions (
+                start_ts, end_ts, active_seconds, idle_seconds,
+                rate_snapshot, cost, note
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (start_ts, end_ts, active_seconds, idle_seconds, rate_snapshot, cost, note),
+        )
+    row_id = cursor.lastrowid
+    if row_id is None:
+        raise RuntimeError("INSERT INTO sessions did not produce a row id")
+    return int(row_id)

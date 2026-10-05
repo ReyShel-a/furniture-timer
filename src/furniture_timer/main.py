@@ -1,6 +1,7 @@
 """Application entry point."""
 
 import logging
+import sqlite3
 import sys
 
 from PySide6.QtWidgets import QApplication
@@ -9,7 +10,7 @@ from furniture_timer import __version__, db, paths
 from furniture_timer.idle import create_idle_detector
 from furniture_timer.logging_setup import setup_logging
 from furniture_timer.settings import Settings
-from furniture_timer.timer_model import TimerModel
+from furniture_timer.timer_model import SessionResult, TimerModel
 from furniture_timer.ui.controller import TimerController
 from furniture_timer.ui.idle_controller import IdleController
 from furniture_timer.ui.idle_dialog import IdleDialog
@@ -30,12 +31,29 @@ def main() -> int:
             settings.currency,
             settings.idle_threshold_sec,
         )
-        return _run_gui(settings)
+        return _run_gui(settings, conn)
     finally:
         conn.close()
 
 
-def _run_gui(settings: Settings) -> int:
+def _persist_session(
+    conn: sqlite3.Connection,
+    result: SessionResult,
+    rate_snapshot: float,
+    cost: float,
+) -> None:
+    db.insert_session(
+        conn,
+        start_ts=result.start_ts,
+        end_ts=result.end_ts,
+        active_seconds=result.active_seconds,
+        idle_seconds=result.idle_seconds,
+        rate_snapshot=rate_snapshot,
+        cost=cost,
+    )
+
+
+def _run_gui(settings: Settings, conn: sqlite3.Connection) -> int:
     app = QApplication.instance() or QApplication(sys.argv)
     widget = TimerWidget()
     model = TimerModel()
@@ -44,6 +62,9 @@ def _run_gui(settings: Settings) -> int:
         widget,
         hourly_rate=lambda: settings.hourly_rate,
         currency=lambda: settings.currency,
+        persist_session=lambda result, rate, cost: _persist_session(
+            conn, result, rate, cost
+        ),
         parent=app,
     )
     detector = create_idle_detector()
