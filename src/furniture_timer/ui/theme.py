@@ -15,7 +15,15 @@ DANGER_HOVER = "#ef5350"
 SURFACE = "#2d2d2d"
 SURFACE_HOVER = "#3a3a3a"
 MUTED = "#6b6b6b"
+DANGER_MUTED = "#c06060"
 ON_COLOR = "#ffffff"
+BG_OPACITY = 0.75
+
+
+def _rgba(hex_color: str, opacity: float) -> str:
+    r, g, b = (int(hex_color[i : i + 2], 16) for i in (1, 3, 5))
+    return f"rgba({r}, {g}, {b}, {round(opacity * 255)})"
+
 
 # One installed family per platform: any family Qt cannot resolve (or a glyph
 # missing from the font) triggers a full font-database scan, ~+45 MB RAM on Windows.
@@ -29,7 +37,7 @@ MONO_FONT, SYMBOL_FONT = _PLATFORM_FONTS.get(
 
 DARK_QSS = f"""
 #TimerWidget {{
-    background-color: {BG};
+    background-color: {_rgba(BG, BG_OPACITY)};
 }}
 QLabel {{
     color: {FG};
@@ -72,8 +80,10 @@ QPushButton:disabled {{
     background-color: {DANGER_HOVER};
 }}
 #stopButton:disabled {{
-    color: {MUTED};
+    color: {DANGER_MUTED};
     background-color: {SURFACE};
+    border: 1px solid {DANGER};
+    padding: 3px 7px;
 }}
 #settingsButton {{
     font-family: {SYMBOL_FONT};
@@ -93,6 +103,10 @@ QToolTip {{
 
 
 def apply_theme(widget: QWidget) -> None:
-    """Apply the dark stylesheet to a top-level widget; children inherit it."""
+    """Apply the dark stylesheet to a top-level widget; children inherit it.
+
+    Must run before the first show(): translucency is fixed at window creation.
+    """
+    widget.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
     widget.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
     widget.setStyleSheet(DARK_QSS)

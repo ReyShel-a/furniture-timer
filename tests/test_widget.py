@@ -141,9 +141,10 @@ def test_glyph_buttons_have_tooltips(widget: TimerWidget) -> None:
 
 def test_dark_theme_applied(widget: TimerWidget) -> None:
     qss = widget.styleSheet()
-    for color in ("#1e1e1e", "#e0e0e0", "#4caf50", "#e53935"):
+    for color in ("rgba(30, 30, 30, 191)", "#e0e0e0", "#4caf50", "#e53935"):
         assert color in qss
     assert widget.testAttribute(Qt.WidgetAttribute.WA_StyledBackground)
+    assert widget.testAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
 
 
 def _send_mouse(
