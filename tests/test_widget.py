@@ -39,9 +39,20 @@ USED_KEYS = [
     "settings.field.idle_threshold",
     "settings.btn.save",
     "settings.btn.cancel",
+    "settings.btn.history",
     "settings.error.rate",
     "settings.error.currency",
     "settings.error.idle_threshold",
+    "history.dialog.title",
+    "history.col.start",
+    "history.col.active",
+    "history.col.cost",
+    "history.empty",
+    "history.btn.export",
+    "history.btn.close",
+    "history.export.title",
+    "history.export.filter",
+    "history.error.write",
 ]
 
 

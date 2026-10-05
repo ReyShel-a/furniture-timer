@@ -2,7 +2,7 @@ from datetime import datetime
 
 import pytest
 
-from furniture_timer.formatting import format_clock, format_hms
+from furniture_timer.formatting import format_clock, format_datetime, format_hms
 
 
 @pytest.mark.parametrize(
@@ -22,3 +22,8 @@ def test_format_hms(seconds: float, expected: str) -> None:
 def test_format_clock_uses_local_time() -> None:
     ts = int(datetime(2026, 10, 5, 9, 7, 42).timestamp())
     assert format_clock(ts) == "09:07"
+
+
+def test_format_datetime_uses_local_time() -> None:
+    ts = int(datetime(2026, 10, 5, 9, 7, 42).timestamp())
+    assert format_datetime(ts) == "2026-10-05 09:07"

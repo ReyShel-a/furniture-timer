@@ -3,12 +3,14 @@
 import logging
 import sqlite3
 from pathlib import Path
+from typing import NamedTuple
 
 from furniture_timer import paths
 
 log = logging.getLogger(__name__)
 
 SCHEMA_VERSION = 1
+HISTORY_LIMIT = 20
 
 # Timestamps are unix epoch seconds (UTC); durations are whole seconds.
 _MIGRATIONS: dict[int, str] = {
@@ -33,6 +35,17 @@ _MIGRATIONS: dict[int, str] = {
 
 class SchemaVersionError(RuntimeError):
     """Database was created by a newer app version."""
+
+
+class SessionRow(NamedTuple):
+    id: int
+    start_ts: int
+    end_ts: int
+    active_seconds: int
+    idle_seconds: int
+    rate_snapshot: float
+    cost: float
+    note: str
 
 
 def connect(path: Path | None = None) -> sqlite3.Connection:
@@ -90,3 +103,21 @@ def insert_session(
     if row_id is None:
         raise RuntimeError("INSERT INTO sessions did not produce a row id")
     return int(row_id)
+
+
+def list_recent_sessions(
+    conn: sqlite3.Connection, limit: int = HISTORY_LIMIT
+) -> list[SessionRow]:
+    """Return the newest sessions first, at most *limit* rows (never negative)."""
+    capped = max(0, int(limit))
+    rows = conn.execute(
+        """
+        SELECT id, start_ts, end_ts, active_seconds, idle_seconds,
+               rate_snapshot, cost, note
+        FROM sessions
+        ORDER BY id DESC
+        LIMIT ?
+        """,
+        (capped,),
+    ).fetchall()
+    return [SessionRow(*row) for row in rows]

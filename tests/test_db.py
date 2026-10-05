@@ -122,3 +122,39 @@ def test_insert_session_defaults_note_and_appends_rows(tmp_path: Path) -> None:
         assert _session_row(conn, second) == (2, 10, 20, 5, 1, 50.0, 10.0, "")
     finally:
         conn.close()
+
+
+def test_list_recent_sessions_empty(tmp_path: Path) -> None:
+    conn = db.connect(tmp_path / "db.sqlite")
+    try:
+        assert db.list_recent_sessions(conn) == []
+    finally:
+        conn.close()
+
+
+def test_list_recent_sessions_newest_first_capped_at_20(tmp_path: Path) -> None:
+    conn = db.connect(tmp_path / "db.sqlite")
+    try:
+        for i in range(1, 26):
+            db.insert_session(conn, i, i + 1, i, 0, 0.0, float(i))
+        rows = db.list_recent_sessions(conn)
+        assert len(rows) == db.HISTORY_LIMIT == 20
+        assert [row.id for row in rows] == list(range(25, 5, -1))
+        assert rows[0] == db.SessionRow(25, 25, 26, 25, 0, 0.0, 25.0, "")
+        assert rows[-1].id == 6
+    finally:
+        conn.close()
+
+
+def test_list_recent_sessions_honors_limit(tmp_path: Path) -> None:
+    conn = db.connect(tmp_path / "db.sqlite")
+    try:
+        db.insert_session(conn, 1, 2, 1, 0, 0.0, 0.0)
+        db.insert_session(conn, 3, 4, 2, 0, 0.0, 0.0)
+        db.insert_session(conn, 5, 6, 3, 0, 0.0, 0.0)
+        rows = db.list_recent_sessions(conn, limit=2)
+        assert [row.id for row in rows] == [3, 2]
+        assert db.list_recent_sessions(conn, limit=0) == []
+        assert db.list_recent_sessions(conn, limit=-1) == []
+    finally:
+        conn.close()

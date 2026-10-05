@@ -21,6 +21,7 @@ from furniture_timer.ui.widget import WIDGET_WIDTH
 class SettingsDialog(QWidget):
     save_clicked = Signal()
     cancel_clicked = Signal()
+    history_clicked = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -66,9 +67,11 @@ class SettingsDialog(QWidget):
 
         self._save = self._make_button("saveButton", t("settings.btn.save"))
         self._cancel = self._make_button("cancelButton", t("settings.btn.cancel"))
+        self._history = self._make_button("historyButton", t("settings.btn.history"))
         self._save.setDefault(True)
         self._save.clicked.connect(self.save_clicked)
         self._cancel.clicked.connect(self.cancel_clicked)
+        self._history.clicked.connect(self.history_clicked)
 
         buttons = QHBoxLayout()
         buttons.setSpacing(4)
@@ -82,6 +85,7 @@ class SettingsDialog(QWidget):
         root.addLayout(form)
         root.addWidget(self._error)
         root.addLayout(buttons)
+        root.addWidget(self._history)
         apply_theme(self)
 
     def set_values(self, rate: float, currency: str, idle_threshold_sec: int) -> None:

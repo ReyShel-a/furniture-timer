@@ -36,9 +36,21 @@ _STRINGS: Final[dict[str, dict[str, str]]] = {
         "settings.field.idle_threshold": "Idle threshold (s)",
         "settings.btn.save": "Save",
         "settings.btn.cancel": "Cancel",
+        "settings.btn.history": "History",
         "settings.error.rate": "Hourly rate must be a number >= 0",
         "settings.error.currency": "Currency must not be empty",
         "settings.error.idle_threshold": "Idle threshold must be an integer >= 1",
+        # Task 12 — history panel
+        "history.dialog.title": "History",
+        "history.col.start": "Start",
+        "history.col.active": "Active",
+        "history.col.cost": "Cost",
+        "history.empty": "No sessions yet",
+        "history.btn.export": "Export CSV",
+        "history.btn.close": "Close",
+        "history.export.title": "Export sessions",
+        "history.export.filter": "CSV files (*.csv)",
+        "history.error.write": "Could not write CSV file",
     },
     "ru": {},  # filled in Task 14
 }

@@ -66,6 +66,7 @@ def test_children_and_i18n(dialog: SettingsDialog) -> None:
     assert _label(dialog, "idleLabel").text() == t("settings.field.idle_threshold")
     assert _button(dialog, "saveButton").text() == t("settings.btn.save")
     assert _button(dialog, "cancelButton").text() == t("settings.btn.cancel")
+    assert _button(dialog, "historyButton").text() == t("settings.btn.history")
     for name in ("rateEdit", "currencyEdit", "idleEdit"):
         _edit(dialog, name)
 
@@ -90,9 +91,19 @@ def test_save_and_cancel_signals(dialog: SettingsDialog) -> None:
     fired: list[str] = []
     dialog.save_clicked.connect(lambda: fired.append("save"))
     dialog.cancel_clicked.connect(lambda: fired.append("cancel"))
+    dialog.history_clicked.connect(lambda: fired.append("history"))
     _button(dialog, "saveButton").click()
     _button(dialog, "cancelButton").click()
     assert fired == ["save", "cancel"]
+
+
+def test_history_signal(dialog: SettingsDialog) -> None:
+    fired: list[str] = []
+    dialog.save_clicked.connect(lambda: fired.append("save"))
+    dialog.cancel_clicked.connect(lambda: fired.append("cancel"))
+    dialog.history_clicked.connect(lambda: fired.append("history"))
+    _button(dialog, "historyButton").click()
+    assert fired == ["history"]
 
 
 def test_escape_emits_cancel(dialog: SettingsDialog) -> None:

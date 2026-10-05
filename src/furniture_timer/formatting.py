@@ -14,3 +14,8 @@ def format_hms(seconds: float) -> str:
 def format_clock(ts: int) -> str:
     """Unix timestamp as local wall-clock HH:MM."""
     return datetime.fromtimestamp(ts).strftime("%H:%M")
+
+
+def format_datetime(ts: int) -> str:
+    """Unix timestamp as local YYYY-MM-DD HH:MM."""
+    return datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M")

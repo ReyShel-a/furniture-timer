@@ -115,6 +115,31 @@ QLineEdit:focus {{
     color: {DANGER};
     font-size: 9pt;
 }}
+QTableWidget {{
+    color: {FG};
+    background-color: {SURFACE};
+    border: 1px solid {SURFACE_HOVER};
+    border-radius: 4px;
+    gridline-color: {SURFACE_HOVER};
+    font-size: 8pt;
+    selection-background-color: {SURFACE};
+    selection-color: {FG};
+}}
+QTableWidget::item {{
+    padding: 2px;
+}}
+QHeaderView::section {{
+    color: {FG};
+    background-color: {SURFACE};
+    border: none;
+    border-bottom: 1px solid {SURFACE_HOVER};
+    padding: 4px 2px;
+    font-size: 8pt;
+}}
+QTableCornerButton::section {{
+    background-color: {SURFACE};
+    border: none;
+}}
 """
 
 

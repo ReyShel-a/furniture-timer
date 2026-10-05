@@ -12,6 +12,8 @@ from furniture_timer.logging_setup import setup_logging
 from furniture_timer.settings import Settings
 from furniture_timer.timer_model import SessionResult, TimerModel
 from furniture_timer.ui.controller import TimerController
+from furniture_timer.ui.history_controller import HistoryController
+from furniture_timer.ui.history_dialog import HistoryDialog
 from furniture_timer.ui.idle_controller import IdleController
 from furniture_timer.ui.idle_dialog import IdleDialog
 from furniture_timer.ui.settings_controller import SettingsController
@@ -85,6 +87,15 @@ def _run_gui(settings: Settings, conn: sqlite3.Connection) -> int:
         settings,
         widget,
         settings_dialog,
+        timer_controller,
+        parent=app,
+    )
+    history_dialog = HistoryDialog(widget)
+    HistoryController(
+        conn,
+        widget,
+        settings_dialog,
+        history_dialog,
         timer_controller,
         parent=app,
     )
