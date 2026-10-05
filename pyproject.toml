@@ -15,6 +15,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
+build = ["pyinstaller>=6.11"]
 
 [project.gui-scripts]
 furniture-timer = "furniture_timer.main:main"
