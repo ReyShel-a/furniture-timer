@@ -48,6 +48,7 @@ class IdleController(QObject):
         dialog.keep_clicked.connect(lambda: self._resolve(IdleChoice.KEEP))
         dialog.resume_clicked.connect(lambda: self._resolve(IdleChoice.RESUME))
         dialog.discard_clicked.connect(lambda: self._resolve(IdleChoice.DISCARD))
+        widget.moved.connect(self._follow)
         timer_controller.state_changed.connect(self.sync)
         self.sync()
 
@@ -76,6 +77,10 @@ class IdleController(QObject):
             self._dialog.hide()
             self._user_returned = False
             self._last_reading = None
+
+    def _follow(self) -> None:
+        if self._dialog.isVisible():
+            self._dialog.place_near(self._widget.frameGeometry())
 
     def _auto_pause(self, reading: float) -> None:
         self._model.auto_pause(reading)

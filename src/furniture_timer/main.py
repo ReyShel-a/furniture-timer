@@ -14,6 +14,8 @@ from furniture_timer.timer_model import SessionResult, TimerModel
 from furniture_timer.ui.controller import TimerController
 from furniture_timer.ui.idle_controller import IdleController
 from furniture_timer.ui.idle_dialog import IdleDialog
+from furniture_timer.ui.settings_controller import SettingsController
+from furniture_timer.ui.settings_dialog import SettingsDialog
 from furniture_timer.ui.widget import TimerWidget
 
 log = logging.getLogger(__name__)
@@ -76,6 +78,14 @@ def _run_gui(settings: Settings, conn: sqlite3.Connection) -> int:
         detector,
         threshold=lambda: float(settings.idle_threshold_sec),
         timer_controller=timer_controller,
+        parent=app,
+    )
+    settings_dialog = SettingsDialog(widget)
+    SettingsController(
+        settings,
+        widget,
+        settings_dialog,
+        timer_controller,
         parent=app,
     )
     app.aboutToQuit.connect(detector.stop)

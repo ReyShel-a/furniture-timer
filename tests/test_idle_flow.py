@@ -1,3 +1,4 @@
+from PySide6.QtCore import QPoint
 from PySide6.QtTest import QTest
 
 from furniture_timer.formatting import format_hms
@@ -244,3 +245,19 @@ def test_real_qtimer_triggers_auto_pause(
     finally:
         idle.deleteLater()
         timer.deleteLater()
+
+
+def test_idle_dialog_follows_widget_move(
+    idle_controller: IdleController,
+    widget: TimerWidget,
+    dialog: IdleDialog,
+    detector: FakeIdleDetector,
+    clock: FakeClock,
+) -> None:
+    widget.move(100, 100)
+    enter_auto_pause(widget, clock, detector, idle_controller)
+    before = dialog.pos()
+    delta = QPoint(40, 25)
+    widget.move(widget.pos() + delta)
+    assert dialog.isVisible()
+    assert dialog.pos() == before + delta

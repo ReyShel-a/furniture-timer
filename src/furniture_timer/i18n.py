@@ -29,6 +29,16 @@ _STRINGS: Final[dict[str, dict[str, str]]] = {
         "idle.btn.keep.tooltip": "Stay paused; idle time is recorded",
         "idle.btn.resume.tooltip": "Continue; idle time is recorded",
         "idle.btn.discard.tooltip": "Continue; idle time is not recorded",
+        # Task 11 — settings dialog
+        "settings.dialog.title": "Settings",
+        "settings.field.rate": "Hourly rate",
+        "settings.field.currency": "Currency",
+        "settings.field.idle_threshold": "Idle threshold (s)",
+        "settings.btn.save": "Save",
+        "settings.btn.cancel": "Cancel",
+        "settings.error.rate": "Hourly rate must be a number >= 0",
+        "settings.error.currency": "Currency must not be empty",
+        "settings.error.idle_threshold": "Idle threshold must be an integer >= 1",
     },
     "ru": {},  # filled in Task 14
 }

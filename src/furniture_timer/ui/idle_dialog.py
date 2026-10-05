@@ -5,10 +5,9 @@ from PySide6.QtGui import QGuiApplication, QPainter, QPaintEvent
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from furniture_timer.i18n import t
+from furniture_timer.ui.placement import place_near as _place_near
 from furniture_timer.ui.theme import apply_theme, background_color
 from furniture_timer.ui.widget import WIDGET_WIDTH
-
-_GAP_PX = 8
 
 
 class IdleDialog(QWidget):
@@ -88,28 +87,7 @@ class IdleDialog(QWidget):
         return any(geo.intersects(screen.availableGeometry()) for screen in QGuiApplication.screens())
 
     def place_near(self, widget_geo: QRect) -> None:
-        self.adjustSize()
-        size = self.frameGeometry().size()
-        screens = QGuiApplication.screens()
-        on_a_screen = any(widget_geo.intersects(s.availableGeometry()) for s in screens)
-        primary = QGuiApplication.primaryScreen()
-        if primary is None:
-            return
-        available = primary.availableGeometry()
-        if not on_a_screen:
-            self.move(available.right() - size.width(), available.bottom() - size.height())
-            return
-        screen = QGuiApplication.screenAt(widget_geo.center()) or primary
-        available = screen.availableGeometry()
-        x = widget_geo.x()
-        y_below = widget_geo.bottom() + _GAP_PX
-        if y_below + size.height() <= available.bottom():
-            y = y_below
-        else:
-            y = widget_geo.top() - _GAP_PX - size.height()
-        x = min(max(x, available.left()), available.right() - size.width())
-        y = min(max(y, available.top()), available.bottom() - size.height())
-        self.move(x, y)
+        _place_near(self, widget_geo)
 
     def paintEvent(self, event: QPaintEvent) -> None:
         painter = QPainter(self)

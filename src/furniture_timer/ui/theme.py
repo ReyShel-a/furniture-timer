@@ -99,6 +99,22 @@ QToolTip {{
     background-color: {SURFACE};
     border: 1px solid {SURFACE_HOVER};
 }}
+QLineEdit {{
+    color: {FG};
+    background-color: {SURFACE};
+    border: 1px solid {SURFACE_HOVER};
+    border-radius: 4px;
+    padding: 4px 6px;
+    font-size: 10pt;
+    selection-background-color: {ACCENT};
+}}
+QLineEdit:focus {{
+    border: 1px solid {ACCENT};
+}}
+#errorLabel {{
+    color: {DANGER};
+    font-size: 9pt;
+}}
 """
 
 

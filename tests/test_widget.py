@@ -33,6 +33,15 @@ USED_KEYS = [
     "idle.btn.keep.tooltip",
     "idle.btn.resume.tooltip",
     "idle.btn.discard.tooltip",
+    "settings.dialog.title",
+    "settings.field.rate",
+    "settings.field.currency",
+    "settings.field.idle_threshold",
+    "settings.btn.save",
+    "settings.btn.cancel",
+    "settings.error.rate",
+    "settings.error.currency",
+    "settings.error.idle_threshold",
 ]
 
 
@@ -195,6 +204,13 @@ def test_fallback_drag_moves_window(widget: TimerWidget) -> None:
     _send_mouse(widget, QEvent.Type.MouseButtonRelease, QPoint(60, 40), no_buttons)
 
     assert widget.pos() == start + QPoint(50, 30)
+
+
+def test_moved_signal_emits_on_move(widget: TimerWidget) -> None:
+    fired: list[int] = []
+    widget.moved.connect(lambda: fired.append(1))
+    widget.move(120, 80)
+    assert fired == [1]
 
 
 @pytest.mark.parametrize("key", USED_KEYS)

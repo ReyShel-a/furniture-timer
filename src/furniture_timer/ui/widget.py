@@ -1,7 +1,7 @@
 """Frameless always-on-top timer widget (passive view, no business logic)."""
 
 from PySide6.QtCore import QPoint, Qt, Signal
-from PySide6.QtGui import QMouseEvent, QPainter, QPaintEvent
+from PySide6.QtGui import QMouseEvent, QMoveEvent, QPainter, QPaintEvent
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from furniture_timer.formatting import format_clock, format_hms
@@ -28,6 +28,7 @@ class TimerWidget(QWidget):
     stop_clicked = Signal()
     settings_clicked = Signal()
     close_clicked = Signal()
+    moved = Signal()
 
     def __init__(self) -> None:
         super().__init__(None)
@@ -89,6 +90,10 @@ class TimerWidget(QWidget):
     def paintEvent(self, event: QPaintEvent) -> None:
         painter = QPainter(self)
         painter.fillRect(event.rect(), self._background)
+
+    def moveEvent(self, event: QMoveEvent) -> None:
+        super().moveEvent(event)
+        self.moved.emit()
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
         if event.button() != Qt.MouseButton.LeftButton:
