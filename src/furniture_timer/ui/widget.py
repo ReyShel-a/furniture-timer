@@ -1,13 +1,14 @@
 """Frameless always-on-top timer widget (passive view, no business logic)."""
 
 from PySide6.QtCore import QPoint, Qt, Signal
-from PySide6.QtGui import QMouseEvent
+from PySide6.QtGui import QMouseEvent, QPainter, QPaintEvent
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from furniture_timer.formatting import format_clock, format_hms
 from furniture_timer.i18n import t
 from furniture_timer.timer_model import TimerState
-from furniture_timer.ui.theme import apply_theme
+from furniture_timer.ui.outlined_label import OutlinedLabel
+from furniture_timer.ui.theme import apply_theme, background_color
 
 WIDGET_WIDTH = 260
 WIDGET_HEIGHT = 150
@@ -38,6 +39,7 @@ class TimerWidget(QWidget):
         self.setFixedSize(WIDGET_WIDTH, WIDGET_HEIGHT)
         self.setWindowTitle(t("app.title"))
         self._drag_offset: QPoint | None = None
+        self._background = background_color()
 
         self._time_label = self._make_label("timeLabel")
         self._price_label = self._make_label("priceLabel")
@@ -82,6 +84,10 @@ class TimerWidget(QWidget):
         else:
             self.setToolTip(t("widget.tooltip.started", time=format_clock(ts)))
 
+    def paintEvent(self, event: QPaintEvent) -> None:
+        painter = QPainter(self)
+        painter.fillRect(event.rect(), self._background)
+
     def mousePressEvent(self, event: QMouseEvent) -> None:
         if event.button() != Qt.MouseButton.LeftButton:
             super().mousePressEvent(event)
@@ -104,7 +110,7 @@ class TimerWidget(QWidget):
         super().mouseReleaseEvent(event)
 
     def _make_label(self, name: str) -> QLabel:
-        label = QLabel(self)
+        label = OutlinedLabel(self)
         label.setObjectName(name)
         label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         return label

@@ -3,6 +3,7 @@
 import sys
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QWidget
 
 BG = "#1e1e1e"
@@ -20,9 +21,11 @@ ON_COLOR = "#ffffff"
 BG_OPACITY = 0.75
 
 
-def _rgba(hex_color: str, opacity: float) -> str:
-    r, g, b = (int(hex_color[i : i + 2], 16) for i in (1, 3, 5))
-    return f"rgba({r}, {g}, {b}, {round(opacity * 255)})"
+def background_color() -> QColor:
+    """Window fill; painted by the widget because QSS backgrounds are skipped on translucent windows."""
+    color = QColor(BG)
+    color.setAlphaF(BG_OPACITY)
+    return color
 
 
 # One installed family per platform: any family Qt cannot resolve (or a glyph
@@ -36,9 +39,6 @@ MONO_FONT, SYMBOL_FONT = _PLATFORM_FONTS.get(
 )
 
 DARK_QSS = f"""
-#TimerWidget {{
-    background-color: {_rgba(BG, BG_OPACITY)};
-}}
 QLabel {{
     color: {FG};
     background: transparent;
@@ -108,5 +108,4 @@ def apply_theme(widget: QWidget) -> None:
     Must run before the first show(): translucency is fixed at window creation.
     """
     widget.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
-    widget.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
     widget.setStyleSheet(DARK_QSS)

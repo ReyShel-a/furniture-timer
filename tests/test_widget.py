@@ -8,6 +8,7 @@ from PySide6.QtWidgets import QApplication, QLabel, QPushButton
 
 from furniture_timer.i18n import _STRINGS, t
 from furniture_timer.timer_model import TimerState
+from furniture_timer.ui.outlined_label import OutlinedLabel
 from furniture_timer.ui.widget import TimerWidget
 
 USED_KEYS = [
@@ -141,10 +142,21 @@ def test_glyph_buttons_have_tooltips(widget: TimerWidget) -> None:
 
 def test_dark_theme_applied(widget: TimerWidget) -> None:
     qss = widget.styleSheet()
-    for color in ("rgba(30, 30, 30, 191)", "#e0e0e0", "#4caf50", "#e53935"):
+    for color in ("#e0e0e0", "#4caf50", "#e53935"):
         assert color in qss
-    assert widget.testAttribute(Qt.WidgetAttribute.WA_StyledBackground)
     assert widget.testAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+
+
+def test_background_is_dark_and_translucent(widget: TimerWidget) -> None:
+    pixel = widget.grab().toImage().pixelColor(2, 2)
+    assert pixel.alpha() == 191
+    for channel in (pixel.red(), pixel.green(), pixel.blue()):
+        assert abs(channel - 30) <= 1
+
+
+def test_labels_are_outlined(widget: TimerWidget) -> None:
+    for name in ("timeLabel", "priceLabel"):
+        assert isinstance(_label(widget, name), OutlinedLabel)
 
 
 def _send_mouse(
