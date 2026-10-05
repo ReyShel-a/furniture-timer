@@ -23,6 +23,7 @@ def test_main_logs_to_file_not_stdout(
 ) -> None:
     monkeypatch.setattr(paths, "log_dir", lambda: tmp_path / "logs")
     monkeypatch.setattr(paths, "db_path", lambda: tmp_path / "db.sqlite")
+    monkeypatch.setattr(main_module, "_run_gui", lambda settings: 0)
 
     assert main_module.main() == 0
 

@@ -1,8 +1,21 @@
-import logging
-import sys
-from collections.abc import Iterator
+import os
 
-import pytest
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+import logging  # noqa: E402
+import sys  # noqa: E402
+from collections.abc import Iterator  # noqa: E402
+
+import pytest  # noqa: E402
+from PySide6.QtWidgets import QApplication  # noqa: E402
+
+
+@pytest.fixture(scope="session")
+def qapp() -> QApplication:
+    app = QApplication.instance()
+    if isinstance(app, QApplication):
+        return app
+    return QApplication([])
 
 
 @pytest.fixture(autouse=True)
