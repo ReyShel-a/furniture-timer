@@ -68,6 +68,7 @@ def test_children_and_i18n(dialog: SettingsDialog) -> None:
     assert _button(dialog, "saveButton").text() == t("settings.btn.save")
     assert _button(dialog, "cancelButton").text() == t("settings.btn.cancel")
     assert _button(dialog, "historyButton").text() == t("settings.btn.history")
+    assert _button(dialog, "screenButton").text() == t("settings.btn.screen")
     for name in ("rateEdit", "currencyEdit", "idleEdit"):
         _edit(dialog, name)
 

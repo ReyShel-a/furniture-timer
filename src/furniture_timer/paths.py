@@ -20,3 +20,8 @@ def log_dir() -> Path:
 
 def db_path() -> Path:
     return data_dir() / DB_FILENAME
+
+
+def screen_profile_dir() -> Path:
+    """Screenshots and zone crops for automatic pause and resume."""
+    return data_dir() / "screen_profile"

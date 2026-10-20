@@ -17,6 +17,12 @@ def test_russian_strings_resolve(key: str) -> None:
         currency="₽",
         time="00:00",
         duration="00:05:00",
+        name="Active",
+        score="0.91",
+        role="Active",
+        width=16,
+        height=16,
+        index=1,
     ) != key
 
 

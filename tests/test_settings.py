@@ -103,6 +103,28 @@ def test_missing_language_follows_system(
     assert Settings(conn).language == "ru"
 
 
+def test_screen_auto_defaults_off_and_roundtrips(conn: sqlite3.Connection) -> None:
+    settings = Settings(conn)
+    assert settings.screen_auto_enabled is False
+
+    settings.screen_auto_enabled = True
+    settings.save()
+
+    assert Settings(conn).screen_auto_enabled is True
+
+
+def test_invalid_screen_auto_falls_back(
+    conn: sqlite3.Connection, caplog: pytest.LogCaptureFixture
+) -> None:
+    conn.execute(
+        "INSERT INTO settings (key, value) VALUES (?, ?)",
+        ("screen_auto_enabled", "maybe"),
+    )
+
+    assert Settings(conn).screen_auto_enabled is False
+    assert "Invalid stored setting" in caplog.text
+
+
 def test_invalid_language_falls_back_to_english(
     conn: sqlite3.Connection, caplog: pytest.LogCaptureFixture
 ) -> None:

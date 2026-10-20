@@ -23,6 +23,7 @@ class SettingsDialog(QWidget):
     save_clicked = Signal()
     cancel_clicked = Signal()
     history_clicked = Signal()
+    screen_clicked = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -73,10 +74,12 @@ class SettingsDialog(QWidget):
         self._save = self._make_button("saveButton", t("settings.btn.save"))
         self._cancel = self._make_button("cancelButton", t("settings.btn.cancel"))
         self._history = self._make_button("historyButton", t("settings.btn.history"))
+        self._screen = self._make_button("screenButton", t("settings.btn.screen"))
         self._save.setDefault(True)
         self._save.clicked.connect(self.save_clicked)
         self._cancel.clicked.connect(self.cancel_clicked)
         self._history.clicked.connect(self.history_clicked)
+        self._screen.clicked.connect(self.screen_clicked)
 
         buttons = QHBoxLayout()
         buttons.setSpacing(4)
@@ -91,6 +94,7 @@ class SettingsDialog(QWidget):
         root.addWidget(self._error)
         root.addLayout(buttons)
         root.addWidget(self._history)
+        root.addWidget(self._screen)
         apply_theme(self)
 
     def set_values(
@@ -127,6 +131,7 @@ class SettingsDialog(QWidget):
         self._save.setText(t("settings.btn.save"))
         self._cancel.setText(t("settings.btn.cancel"))
         self._history.setText(t("settings.btn.history"))
+        self._screen.setText(t("settings.btn.screen"))
 
     def show_error(self, message: str) -> None:
         self._error.setText(message)

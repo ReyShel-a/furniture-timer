@@ -46,6 +46,7 @@ USED_KEYS = [
     "settings.btn.save",
     "settings.btn.cancel",
     "settings.btn.history",
+    "settings.btn.screen",
     "settings.error.rate",
     "settings.error.currency",
     "settings.error.idle_threshold",
@@ -72,6 +73,29 @@ USED_KEYS = [
     "history.period.to",
     "tray.action.show",
     "tray.action.quit",
+    "screen.dialog.title",
+    "screen.enable",
+    "screen.btn.upload",
+    "screen.btn.capture",
+    "screen.btn.delete",
+    "screen.btn.check",
+    "screen.role.active",
+    "screen.role.interrupt",
+    "screen.hint",
+    "screen.check.zone",
+    "screen.signal.active",
+    "screen.signal.interrupt",
+    "screen.signal.absent",
+    "screen.error.need_active",
+    "screen.error.image",
+    "screen.error.capture",
+    "screen.error.save",
+    "screen.zone.item",
+    "screen.source.item",
+    "screen.file.filter",
+    "widget.tooltip.screen_active",
+    "widget.tooltip.screen_paused",
+    "widget.tooltip.screen_hold",
 ]
 
 
@@ -181,6 +205,12 @@ def test_session_start_tooltip(widget: TimerWidget) -> None:
     widget.show_session_start(None)
     assert widget.toolTip() == "No active session"
 
+    widget.show_session_start(ts)
+    widget.show_screen_status("widget.tooltip.screen_paused")
+    assert widget.toolTip() == "Session started at 14:30\nScreen: paused"
+    widget.show_screen_status(None)
+    assert widget.toolTip() == "Session started at 14:30"
+
 
 def test_glyph_buttons_have_tooltips(widget: TimerWidget) -> None:
     assert _button(widget, "settingsButton").text() == "⚙"
@@ -247,7 +277,18 @@ def test_moved_signal_emits_on_move(widget: TimerWidget) -> None:
 def test_used_i18n_keys_exist(key: str) -> None:
     assert key in _STRINGS["en"]
     assert t(
-        key, rate=0.0, cost=0.0, currency="₽", time="00:00", duration="00:00:00"
+        key,
+        rate=0.0,
+        cost=0.0,
+        currency="₽",
+        time="00:00",
+        duration="00:00:00",
+        name="Active",
+        score="1.00",
+        role="Active",
+        width=16,
+        height=16,
+        index=1,
     ) != key
 
 

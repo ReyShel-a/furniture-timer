@@ -16,11 +16,13 @@ DEFAULT_HOURLY_RATE = 0.0
 DEFAULT_CURRENCY = "₽"
 DEFAULT_IDLE_THRESHOLD_SEC = 300
 DEFAULT_LANGUAGE = DEFAULT_LANG
+DEFAULT_SCREEN_AUTO = False
 
 KEY_HOURLY_RATE = "hourly_rate"
 KEY_CURRENCY = "currency"
 KEY_IDLE_THRESHOLD_SEC = "idle_threshold_sec"
 KEY_LANGUAGE = "language"
+KEY_SCREEN_AUTO = "screen_auto_enabled"
 
 
 def parse_hourly_rate(raw: str) -> float:
@@ -51,6 +53,15 @@ def parse_language(raw: str) -> str:
     return value
 
 
+def parse_screen_auto(raw: str) -> bool:
+    value = raw.strip().lower()
+    if value in {"1", "true"}:
+        return True
+    if value in {"0", "false"}:
+        return False
+    raise ValueError(f"screen_auto_enabled must be 0 or 1, got {raw!r}")
+
+
 class Settings:
     """In-memory view of the settings table; call save() to persist changes.
 
@@ -63,6 +74,7 @@ class Settings:
         self._currency = DEFAULT_CURRENCY
         self._idle_threshold_sec = DEFAULT_IDLE_THRESHOLD_SEC
         self._language = system_language()
+        self._screen_auto_enabled = DEFAULT_SCREEN_AUTO
         self.load()
 
     @property
@@ -97,6 +109,16 @@ class Settings:
     def language(self, value: str) -> None:
         self._language = parse_language(value)
 
+    @property
+    def screen_auto_enabled(self) -> bool:
+        return self._screen_auto_enabled
+
+    @screen_auto_enabled.setter
+    def screen_auto_enabled(self, value: bool) -> None:
+        if not isinstance(value, bool):
+            raise ValueError(f"screen_auto_enabled must be bool, got {value!r}")
+        self._screen_auto_enabled = value
+
     def load(self) -> None:
         """Read stored values. Invalid ones fall back to defaults; missing language follows the OS."""
         rows: dict[str, str] = dict(self._conn.execute("SELECT key, value FROM settings"))
@@ -109,6 +131,9 @@ class Settings:
             self._language = system_language()
         else:
             self._language = _read(rows, KEY_LANGUAGE, parse_language, DEFAULT_LANGUAGE)
+        self._screen_auto_enabled = _read(
+            rows, KEY_SCREEN_AUTO, parse_screen_auto, DEFAULT_SCREEN_AUTO
+        )
 
     def save(self) -> None:
         values = {
@@ -116,6 +141,7 @@ class Settings:
             KEY_CURRENCY: self._currency,
             KEY_IDLE_THRESHOLD_SEC: str(self._idle_threshold_sec),
             KEY_LANGUAGE: self._language,
+            KEY_SCREEN_AUTO: "1" if self._screen_auto_enabled else "0",
         }
         with self._conn:
             self._conn.executemany(
