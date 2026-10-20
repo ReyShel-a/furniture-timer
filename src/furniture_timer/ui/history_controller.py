@@ -1,4 +1,4 @@
-"""Load recent sessions into the history panel and export CSV."""
+"""Load sessions for a period into the history panel and export a cost report."""
 
 import logging
 import sqlite3
@@ -12,9 +12,13 @@ from PySide6.QtWidgets import QFileDialog
 from furniture_timer import db
 from furniture_timer.formatting import format_datetime, format_hms
 from furniture_timer.i18n import t
-from furniture_timer.session_csv import write_sessions_csv
+from furniture_timer.session_csv import (
+    BLANK_PROJECT,
+    group_sessions_by_project,
+    write_selection_report_csv,
+)
 from furniture_timer.ui.controller import TimerController
-from furniture_timer.ui.history_dialog import HistoryDialog
+from furniture_timer.ui.history_dialog import PROJECT_COLUMN, START_COLUMN, HistoryDialog
 from furniture_timer.ui.settings_dialog import SettingsDialog
 from furniture_timer.ui.widget import TimerWidget
 
@@ -40,16 +44,20 @@ class HistoryController(QObject):
         self._settings_dialog = settings_dialog
         self._dialog = dialog
         self._rows: list[db.SessionRow] = []
+        self._date_sort_desc: bool | None = None
         self._project_sort_desc: bool | None = None
         self._get_save_path = get_save_path or self._ask_save_path
 
         settings_dialog.history_clicked.connect(self.open)
         widget.moved.connect(self._follow)
         dialog.export_clicked.connect(self._on_export)
+        dialog.delete_clicked.connect(self._on_delete)
         dialog.clear_clicked.connect(self._on_clear)
         dialog.close_clicked.connect(self._on_close)
         dialog.sort_clicked.connect(self._on_sort)
         dialog.summary_changed.connect(self._refresh_summary)
+        dialog.period_changed.connect(self._reload)
+        dialog.selection_changed.connect(self._refresh_selection)
         timer_controller.state_changed.connect(self._on_state_changed)
 
     def open(self) -> None:
@@ -63,7 +71,8 @@ class HistoryController(QObject):
     def _reload(self) -> None:
         self._dialog.clear_error()
         try:
-            self._rows = db.list_recent_sessions(self._conn)
+            start_ts, end_ts = self._dialog.period_bounds()
+            self._rows = db.list_sessions_between(self._conn, start_ts, end_ts)
             projects = db.list_known_projects(self._conn)
         except Exception:
             log.exception("Failed to load session history")
@@ -78,15 +87,10 @@ class HistoryController(QObject):
 
     def _show_rows(self) -> None:
         visible = self._visible_rows()
-        if not visible:
-            self._dialog.set_rows([])
-            self._dialog.show_empty(True)
-            self._dialog.set_export_enabled(False)
-            self._dialog.set_clear_enabled(False)
-            return
         self._dialog.set_rows(
             [
                 (
+                    row.id,
                     format_datetime(row.start_ts),
                     format_hms(row.active_seconds),
                     f"{row.cost:.2f}",
@@ -97,20 +101,40 @@ class HistoryController(QObject):
                 for row in visible
             ]
         )
-        self._dialog.show_empty(False)
-        self._dialog.set_export_enabled(True)
-        self._dialog.set_clear_enabled(True)
+        if not visible:
+            self._dialog.show_empty(True)
+            self._dialog.set_clear_enabled(False)
+        else:
+            self._dialog.show_empty(False)
+            self._dialog.set_clear_enabled(True)
+        self._refresh_selection()
 
     def _visible_rows(self) -> list[db.SessionRow]:
-        if self._project_sort_desc is None:
-            return self._rows
-        return sort_sessions_by_project(self._rows, descending=self._project_sort_desc)
+        if self._date_sort_desc is not None:
+            return sort_sessions_by_start(self._rows, descending=self._date_sort_desc)
+        if self._project_sort_desc is not None:
+            return sort_sessions_by_project(self._rows, descending=self._project_sort_desc)
+        return self._rows
 
-    def _on_sort(self) -> None:
-        if self._project_sort_desc is None or self._project_sort_desc:
-            self._project_sort_desc = False
+    def _selected_rows(self) -> list[db.SessionRow]:
+        chosen = set(self._dialog.checked_ids())
+        return [row for row in self._visible_rows() if row.id in chosen]
+
+    def _on_sort(self, column: int) -> None:
+        if column == START_COLUMN:
+            self._project_sort_desc = None
+            if self._date_sort_desc is None or self._date_sort_desc:
+                self._date_sort_desc = False
+            else:
+                self._date_sort_desc = True
+        elif column == PROJECT_COLUMN:
+            self._date_sort_desc = None
+            if self._project_sort_desc is None or self._project_sort_desc:
+                self._project_sort_desc = False
+            else:
+                self._project_sort_desc = True
         else:
-            self._project_sort_desc = True
+            return
         self._show_rows()
 
     def _refresh_summary(self) -> None:
@@ -118,8 +142,8 @@ class HistoryController(QObject):
         if not number:
             self._dialog.show_summary(t("history.summary.pick"))
             return
-        start_ts, end_ts = self._dialog.period_bounds()
         try:
+            start_ts, end_ts = self._dialog.period_bounds()
             active_seconds, cost = db.summarize_project(self._conn, number, start_ts, end_ts)
         except Exception:
             log.exception("Failed to summarize project")
@@ -129,6 +153,34 @@ class HistoryController(QObject):
         self._dialog.show_summary(
             t("history.summary.total", time=format_hms(active_seconds), cost=cost)
         )
+
+    def _refresh_selection(self) -> None:
+        selected = self._selected_rows()
+        self._dialog.set_export_enabled(bool(selected))
+        self._dialog.set_delete_enabled(bool(selected))
+        if not selected:
+            self._dialog.show_selection("")
+            return
+        groups = group_sessions_by_project(selected)
+        lines = [
+            t(
+                "history.selection.total",
+                count=len(selected),
+                time=format_hms(sum(row.active_seconds for row in selected)),
+                cost=sum(row.cost for row in selected),
+            )
+        ]
+        for group in groups:
+            lines.append(
+                t(
+                    "history.selection.project",
+                    number=group.number or BLANK_PROJECT,
+                    name=group.name,
+                    time=format_hms(group.active_seconds),
+                    cost=group.cost,
+                )
+            )
+        self._dialog.show_selection("\n".join(lines))
 
     def _follow(self) -> None:
         if self._dialog.isVisible():
@@ -140,19 +192,34 @@ class HistoryController(QObject):
             self._dialog.place_near(self._widget.frameGeometry())
 
     def _on_export(self) -> None:
-        if not self._rows:
+        selected = self._selected_rows()
+        if not selected:
             return
         path = self._get_save_path()
         if path is None:
             return
         try:
-            write_sessions_csv(path, self._rows)
+            write_selection_report_csv(path, selected)
         except Exception:
             log.exception("Failed to write session CSV")
             self._dialog.show_error(t("history.error.write"))
             return
         self._dialog.clear_error()
-        log.info("Exported %d sessions to %s", len(self._rows), path)
+        log.info("Exported %d sessions to %s", len(selected), path)
+
+    def _on_delete(self) -> None:
+        ids = self._dialog.checked_ids()
+        if not ids:
+            return
+        try:
+            db.delete_sessions(self._conn, ids)
+        except Exception:
+            log.exception("Failed to delete sessions")
+            self._dialog.show_error(t("history.error.delete"))
+            return
+        self._load_suggestions()
+        self._reload()
+        log.info("Deleted %d sessions", len(ids))
 
     def _on_clear(self) -> None:
         try:
@@ -161,9 +228,18 @@ class HistoryController(QObject):
             log.exception("Failed to clear session history")
             self._dialog.show_error(t("history.error.clear"))
             return
-        self._widget.set_job_suggestions([], [])
+        self._load_suggestions()
         self._reload()
         log.info("Cleared session history")
+
+    def _load_suggestions(self) -> None:
+        try:
+            self._widget.set_job_suggestions(
+                db.list_known_projects(self._conn),
+                db.list_known_clients(self._conn),
+            )
+        except Exception:
+            log.exception("Failed to load project suggestions")
 
     def _on_close(self) -> None:
         self._dialog.hide()
@@ -178,6 +254,18 @@ class HistoryController(QObject):
         if not chosen:
             return None
         return Path(chosen)
+
+
+def sort_sessions_by_start(
+    rows: Sequence[db.SessionRow], descending: bool = False
+) -> list[db.SessionRow]:
+    """Sort by start time. Equal times keep the newer id first."""
+
+    def key(row: db.SessionRow) -> tuple[int, int]:
+        start = -row.start_ts if descending else row.start_ts
+        return (start, -row.id)
+
+    return sorted(rows, key=key)
 
 
 def sort_sessions_by_project(

@@ -2,6 +2,7 @@
 
 import logging
 import sqlite3
+from collections.abc import Sequence
 from pathlib import Path
 from typing import NamedTuple
 
@@ -240,6 +241,35 @@ def list_recent_sessions(
         (capped,),
     ).fetchall()
     return [SessionRow(*row) for row in rows]
+
+
+def list_sessions_between(
+    conn: sqlite3.Connection, start_ts: int, end_ts: int
+) -> list[SessionRow]:
+    """Finished sessions whose start falls in [start_ts, end_ts], newest first."""
+    rows = conn.execute(
+        f"""
+        SELECT {_SESSION_COLUMNS}
+        FROM sessions
+        WHERE finalized = 1 AND start_ts >= ? AND start_ts <= ?
+        ORDER BY start_ts DESC, id DESC
+        """,
+        (start_ts, end_ts),
+    ).fetchall()
+    return [SessionRow(*row) for row in rows]
+
+
+def delete_sessions(conn: sqlite3.Connection, ids: Sequence[int]) -> None:
+    """Delete finished sessions with these ids. Open sessions and settings stay."""
+    chosen = tuple(dict.fromkeys(int(row_id) for row_id in ids))
+    if not chosen:
+        return
+    placeholders = ",".join("?" for _ in chosen)
+    with conn:
+        conn.execute(
+            f"DELETE FROM sessions WHERE finalized = 1 AND id IN ({placeholders})",
+            chosen,
+        )
 
 
 def list_known_projects(conn: sqlite3.Connection) -> list[ProjectRef]:

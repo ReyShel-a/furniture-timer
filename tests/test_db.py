@@ -294,6 +294,46 @@ def test_open_session_stays_hidden_until_finalized(tmp_path: Path) -> None:
         conn.close()
 
 
+def test_list_sessions_between_is_inclusive_and_skips_open(tmp_path: Path) -> None:
+    conn = db.connect(tmp_path / "db.sqlite")
+    try:
+        db.insert_session(conn, 100, 110, 1, 0, 0.0, 1.0)
+        db.insert_session(conn, 100, 110, 2, 0, 0.0, 2.0)
+        db.insert_session(conn, 50, 60, 3, 0, 0.0, 3.0)
+        db.insert_session(conn, 200, 210, 4, 0, 0.0, 4.0)
+        open_id = db.save_session(
+            conn, None, 150, 160, 5, 0, 0.0, 5.0, finalized=False
+        )
+        assert [row.id for row in db.list_sessions_between(conn, 100, 200)] == [4, 2, 1]
+        assert [row.id for row in db.list_sessions_between(conn, 201, 300)] == []
+        assert open_id == 5
+    finally:
+        conn.close()
+
+
+def test_delete_sessions_keeps_open_rows_settings_and_others(tmp_path: Path) -> None:
+    conn = db.connect(tmp_path / "db.sqlite")
+    try:
+        finished = db.insert_session(conn, 100, 110, 1, 0, 0.0, 1.0, project_number="7")
+        kept = db.insert_session(conn, 200, 210, 2, 0, 0.0, 2.0, project_number="12")
+        open_id = db.save_session(
+            conn, None, 150, 160, 5, 0, 0.0, 5.0, finalized=False, project_number="7"
+        )
+        with conn:
+            conn.execute("INSERT INTO settings (key, value) VALUES ('hourly_rate', '20')")
+        db.delete_sessions(conn, [])
+        db.delete_sessions(conn, [finished, open_id, 999])
+        assert [row.id for row in db.list_recent_sessions(conn)] == [kept]
+        assert conn.execute(
+            "SELECT id, finalized FROM sessions WHERE id = ?", (open_id,)
+        ).fetchone() == (open_id, 0)
+        assert conn.execute("SELECT value FROM settings WHERE key = 'hourly_rate'").fetchone() == (
+            "20",
+        )
+    finally:
+        conn.close()
+
+
 def test_save_session_inserts_when_the_row_is_gone(tmp_path: Path) -> None:
     conn = db.connect(tmp_path / "db.sqlite")
     try:

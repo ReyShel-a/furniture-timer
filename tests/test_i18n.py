@@ -23,6 +23,8 @@ def test_russian_strings_resolve(key: str) -> None:
         width=16,
         height=16,
         index=1,
+        count=1,
+        number="7",
     ) != key
 
 
