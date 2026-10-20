@@ -109,6 +109,23 @@ class TimerModel:
             start_ts=self._start_ts,
         )
 
+    def session_snapshot(self) -> SessionResult | None:
+        """Totals stop() would store, without changing state.
+
+        An unresolved auto-pause counts as idle, the same way stop() keeps it.
+        """
+        if self._state is TimerState.IDLE or self._start_ts is None:
+            return None
+        idle = self._idle_total
+        if self._state is TimerState.AUTO_PAUSED:
+            idle += self._peak_idle
+        return SessionResult(
+            start_ts=self._start_ts,
+            end_ts=int(self._wall_clock()),
+            active_seconds=round(self.active_seconds),
+            idle_seconds=round(idle),
+        )
+
     def start(self) -> None:
         self._require(TimerState.IDLE, op="start")
         self._start_ts = int(self._wall_clock())

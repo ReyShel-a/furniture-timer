@@ -17,6 +17,8 @@ from furniture_timer.ui.history_controller import HistoryController
 from furniture_timer.ui.history_dialog import HistoryDialog
 from furniture_timer.ui.idle_controller import IdleController
 from furniture_timer.ui.idle_dialog import IdleDialog
+from furniture_timer.ui.screen_controller import ScreenController
+from furniture_timer.ui.screen_dialog import ScreenDialog
 from furniture_timer.ui.settings_controller import SettingsController
 from furniture_timer.ui.settings_dialog import SettingsDialog
 from furniture_timer.ui.tray_controller import TrayController
@@ -51,15 +53,19 @@ def _persist_session(
     project_number: str = "",
     project_name: str = "",
     client_name: str = "",
-) -> None:
-    db.insert_session(
+    row_id: int | None = None,
+    finalized: bool = True,
+) -> int:
+    return db.save_session(
         conn,
+        row_id,
         start_ts=result.start_ts,
         end_ts=result.end_ts,
         active_seconds=result.active_seconds,
         idle_seconds=result.idle_seconds,
         rate_snapshot=rate_snapshot,
         cost=cost,
+        finalized=finalized,
         project_number=project_number,
         project_name=project_name,
         client_name=client_name,
@@ -74,6 +80,7 @@ def _load_job_suggestions(conn: sqlite3.Connection, widget: TimerWidget) -> None
 
 
 def _run_gui(settings: Settings, conn: sqlite3.Connection) -> int:
+    db.finalize_open_sessions(conn)
     set_language(settings.language)
     app = QApplication.instance() or QApplication(sys.argv)
     widget = TimerWidget()
@@ -83,8 +90,14 @@ def _run_gui(settings: Settings, conn: sqlite3.Connection) -> int:
         widget,
         hourly_rate=lambda: settings.hourly_rate,
         currency=lambda: settings.currency,
-        persist_session=lambda result, rate, cost: _persist_session(
-            conn, result, rate, cost, *widget.job()
+        save_session=lambda row_id, result, rate, cost, finalized: _persist_session(
+            conn,
+            result,
+            rate,
+            cost,
+            *widget.job(),
+            row_id=row_id,
+            finalized=finalized,
         ),
         parent=app,
     )
@@ -100,6 +113,16 @@ def _run_gui(settings: Settings, conn: sqlite3.Connection) -> int:
         parent=app,
     )
     settings_dialog = SettingsDialog(widget)
+    screen_dialog = ScreenDialog(widget)
+    ScreenController(
+        model,
+        widget,
+        settings_dialog,
+        screen_dialog,
+        settings,
+        timer_controller,
+        parent=app,
+    )
     settings_controller = SettingsController(
         settings,
         widget,
@@ -122,6 +145,7 @@ def _run_gui(settings: Settings, conn: sqlite3.Connection) -> int:
         widget.retranslate()
         dialog.retranslate()
         settings_dialog.retranslate()
+        screen_dialog.retranslate()
         history_dialog.retranslate()
         tray.retranslate()
         timer_controller.refresh()
@@ -137,6 +161,7 @@ def _run_gui(settings: Settings, conn: sqlite3.Connection) -> int:
     else:
         widget.close_clicked.connect(app.quit)
     tray.quit_requested.connect(app.quit)
+    app.aboutToQuit.connect(timer_controller.finalize_open_session)
     app.aboutToQuit.connect(detector.stop)
     widget.show()
     exit_code = app.exec()

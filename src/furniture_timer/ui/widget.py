@@ -1,7 +1,5 @@
 """Frameless always-on-top timer widget (passive view, no business logic)."""
 
-import json
-import time
 from collections.abc import Sequence
 
 from PySide6.QtCore import QPoint, Qt, Signal
@@ -14,27 +12,6 @@ from furniture_timer.settings import DEFAULT_CURRENCY, DEFAULT_HOURLY_RATE
 from furniture_timer.timer_model import TimerState
 from furniture_timer.ui.outlined_label import OutlinedLabel
 from furniture_timer.ui.theme import apply_theme, background_color
-
-# #region agent log
-def _agent_log(hypothesis_id: str, location: str, message: str, data: dict[str, object]) -> None:
-    try:
-        payload = {
-            "sessionId": "fe8f6b",
-            "hypothesisId": hypothesis_id,
-            "location": location,
-            "message": message,
-            "data": data,
-            "timestamp": int(time.time() * 1000),
-        }
-        with open(
-            r"e:\CRM-AI-Mebel\Таймер_проектирования_мебель\debug-fe8f6b.log",
-            "a",
-            encoding="utf-8",
-        ) as handle:
-            handle.write(json.dumps(payload, ensure_ascii=False) + "\n")
-    except Exception:
-        pass
-# #endregion
 
 WIDGET_WIDTH = 260
 WIDGET_HEIGHT = 248
@@ -67,7 +44,6 @@ class TimerWidget(QWidget):
         self.setFixedSize(WIDGET_WIDTH, WIDGET_HEIGHT)
         self.setWindowTitle(t("app.title"))
         self._drag_offset: QPoint | None = None
-        self._last_move_at: float | None = None
         self._background = background_color()
         self._state = TimerState.IDLE
         self._rate = DEFAULT_HOURLY_RATE
@@ -186,19 +162,6 @@ class TimerWidget(QWidget):
         painter.fillRect(event.rect(), self._background)
 
     def moveEvent(self, event: QMoveEvent) -> None:
-        now = time.perf_counter()
-        if self._last_move_at is not None:
-            gap_ms = (now - self._last_move_at) * 1000
-            if gap_ms > 100:
-                # #region agent log
-                _agent_log(
-                    "D",
-                    "widget.py:moveEvent",
-                    "drag gap",
-                    {"gap_ms": round(gap_ms, 1)},
-                )
-                # #endregion
-        self._last_move_at = now
         super().moveEvent(event)
         self.moved.emit()
 

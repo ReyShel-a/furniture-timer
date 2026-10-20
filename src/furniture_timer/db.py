@@ -9,7 +9,7 @@ from furniture_timer import paths
 
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 HISTORY_LIMIT = 20
 
 _SESSION_COLUMNS = (
@@ -39,6 +39,9 @@ _MIGRATIONS: dict[int, str] = {
         ALTER TABLE sessions ADD COLUMN project_number TEXT NOT NULL DEFAULT '';
         ALTER TABLE sessions ADD COLUMN project_name   TEXT NOT NULL DEFAULT '';
         ALTER TABLE sessions ADD COLUMN client_name    TEXT NOT NULL DEFAULT '';
+    """,
+    3: """
+        ALTER TABLE sessions ADD COLUMN finalized INTEGER NOT NULL DEFAULT 1;
     """,
 }
 
@@ -75,6 +78,9 @@ def connect(path: Path | None = None) -> sqlite3.Connection:
     conn = sqlite3.connect(target)
     try:
         migrate(conn)
+        # FULL waits for the commit to reach disk, so a power loss keeps the last checkpoint.
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA synchronous=FULL")
     except Exception:
         conn.close()
         raise
@@ -139,6 +145,85 @@ def insert_session(
     return int(row_id)
 
 
+def save_session(
+    conn: sqlite3.Connection,
+    row_id: int | None,
+    start_ts: int,
+    end_ts: int,
+    active_seconds: int,
+    idle_seconds: int,
+    rate_snapshot: float,
+    cost: float,
+    finalized: bool,
+    note: str = "",
+    project_number: str = "",
+    project_name: str = "",
+    client_name: str = "",
+) -> int:
+    """Insert an open session, or update the row already stored for it.
+
+    A missing *row_id* (cleared history, first checkpoint) inserts a new row.
+    """
+    flag = 1 if finalized else 0
+    values = (
+        start_ts,
+        end_ts,
+        active_seconds,
+        idle_seconds,
+        rate_snapshot,
+        cost,
+        note,
+        project_number,
+        project_name,
+        client_name,
+        flag,
+    )
+    with conn:
+        if row_id is not None:
+            exists = conn.execute(
+                "SELECT 1 FROM sessions WHERE id = ?", (row_id,)
+            ).fetchone()
+            if exists is not None:
+                conn.execute(
+                    """
+                    UPDATE sessions SET
+                        start_ts = ?, end_ts = ?, active_seconds = ?, idle_seconds = ?,
+                        rate_snapshot = ?, cost = ?, note = ?,
+                        project_number = ?, project_name = ?, client_name = ?,
+                        finalized = ?
+                    WHERE id = ?
+                    """,
+                    (*values, row_id),
+                )
+                return int(row_id)
+        cursor = conn.execute(
+            """
+            INSERT INTO sessions (
+                start_ts, end_ts, active_seconds, idle_seconds,
+                rate_snapshot, cost, note, project_number, project_name, client_name,
+                finalized
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            values,
+        )
+    new_id = cursor.lastrowid
+    if new_id is None:
+        raise RuntimeError("INSERT INTO sessions did not produce a row id")
+    return int(new_id)
+
+
+def finalize_open_sessions(conn: sqlite3.Connection) -> int:
+    """Close sessions left open by a process that is no longer running."""
+    with conn:
+        cursor = conn.execute(
+            "UPDATE sessions SET finalized = 1 WHERE finalized = 0"
+        )
+    count = int(cursor.rowcount)
+    if count:
+        log.info("Finalized %d open session(s) left from a previous run", count)
+    return count
+
+
 def list_recent_sessions(
     conn: sqlite3.Connection, limit: int = HISTORY_LIMIT
 ) -> list[SessionRow]:
@@ -148,6 +233,7 @@ def list_recent_sessions(
         f"""
         SELECT {_SESSION_COLUMNS}
         FROM sessions
+        WHERE finalized = 1
         ORDER BY id DESC
         LIMIT ?
         """,
@@ -180,12 +266,13 @@ def summarize_project(
     start_ts: int,
     end_ts: int,
 ) -> tuple[int, float]:
-    """Sum active time and cost for one project whose start falls in [start_ts, end_ts]."""
+    """Sum active time and cost for one finished project session in [start_ts, end_ts]."""
     row = conn.execute(
         """
         SELECT COALESCE(SUM(active_seconds), 0), COALESCE(SUM(cost), 0.0)
         FROM sessions
         WHERE project_number = ? AND start_ts >= ? AND start_ts <= ?
+          AND finalized = 1
         """,
         (project_number, start_ts, end_ts),
     ).fetchone()

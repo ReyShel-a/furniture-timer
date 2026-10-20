@@ -80,8 +80,8 @@ def _controller(
         model,
         widget,
         hourly_rate=lambda: rate,
-        persist_session=lambda result, snap, cost: _persist_session(
-            conn, result, snap, cost
+        save_session=lambda row_id, result, rate, cost, finalized: _persist_session(
+            conn, result, rate, cost, row_id=row_id, finalized=finalized
         ),
     )
 
@@ -157,10 +157,16 @@ def test_persist_failure_still_resets_ui(
     widget: TimerWidget,
     clock: FakeClock,
 ) -> None:
-    def boom(_result: SessionResult, _rate: float, _cost: float) -> None:
+    def boom(
+        _row_id: int | None,
+        _result: SessionResult,
+        _rate: float,
+        _cost: float,
+        _finalized: bool,
+    ) -> int:
         raise RuntimeError("disk full")
 
-    controller = TimerController(model, widget, persist_session=boom)
+    controller = TimerController(model, widget, save_session=boom)
     try:
         _click(widget, "startPauseButton")
         clock.advance(10)
@@ -182,8 +188,14 @@ def test_stop_writes_project_and_client(
         model,
         widget,
         hourly_rate=lambda: RATE,
-        persist_session=lambda result, rate, cost: _persist_session(
-            conn, result, rate, cost, *widget.job()
+        save_session=lambda row_id, result, rate, cost, finalized: _persist_session(
+            conn,
+            result,
+            rate,
+            cost,
+            *widget.job(),
+            row_id=row_id,
+            finalized=finalized,
         ),
     )
     try:
@@ -237,6 +249,116 @@ def test_shared_name_does_not_change_number(widget: TimerWidget) -> None:
     name.setCurrentIndex(0)
     name.activated[int].emit(0)
     assert number.currentText() == "kept"
+
+
+def test_running_checkpoint_is_one_open_row(
+    model: TimerModel,
+    widget: TimerWidget,
+    clock: FakeClock,
+    conn: sqlite3.Connection,
+) -> None:
+    controller = _controller(model, widget, conn)
+    try:
+        _click(widget, "startPauseButton")
+        clock.advance(10)
+        controller.checkpoint()
+        clock.advance(15)
+        controller.checkpoint()
+    finally:
+        controller.deleteLater()
+
+    rows = conn.execute(
+        "SELECT id, active_seconds, finalized FROM sessions ORDER BY id"
+    ).fetchall()
+    assert rows == [(1, 25, 0)]
+    assert db.list_recent_sessions(conn) == []
+    assert model.state is TimerState.RUNNING
+
+
+def test_pause_updates_the_open_row_while_the_tick_is_stopped(
+    model: TimerModel,
+    widget: TimerWidget,
+    clock: FakeClock,
+    conn: sqlite3.Connection,
+) -> None:
+    controller = _controller(model, widget, conn)
+    try:
+        _click(widget, "startPauseButton")
+        clock.advance(25)
+        _click(widget, "startPauseButton")
+        assert not controller.is_ticking
+        assert controller.is_checkpointing
+    finally:
+        controller.deleteLater()
+
+    assert conn.execute(
+        "SELECT id, active_seconds, finalized FROM sessions"
+    ).fetchall() == [(1, 25, 0)]
+
+
+def test_stop_finalizes_the_checkpoint_row(
+    model: TimerModel,
+    widget: TimerWidget,
+    clock: FakeClock,
+    conn: sqlite3.Connection,
+) -> None:
+    controller = _controller(model, widget, conn)
+    try:
+        _click(widget, "startPauseButton")
+        clock.advance(10)
+        controller.checkpoint()
+        _click(widget, "stopButton")
+    finally:
+        controller.deleteLater()
+
+    assert conn.execute(
+        "SELECT id, active_seconds, finalized FROM sessions"
+    ).fetchall() == [(1, 10, 1)]
+    assert [row.id for row in db.list_recent_sessions(conn)] == [1]
+    assert model.state is TimerState.IDLE
+
+
+def test_auto_pause_checkpoint_keeps_pending_idle(
+    model: TimerModel,
+    widget: TimerWidget,
+    clock: FakeClock,
+    conn: sqlite3.Connection,
+) -> None:
+    controller = _controller(model, widget, conn)
+    try:
+        _click(widget, "startPauseButton")
+        clock.advance(100)
+        model.auto_pause(40)
+        controller.refresh()
+    finally:
+        controller.deleteLater()
+
+    assert conn.execute(
+        "SELECT active_seconds, idle_seconds, finalized FROM sessions"
+    ).fetchone() == (60, 40, 0)
+    assert model.state is TimerState.AUTO_PAUSED
+
+
+def test_quit_finalizes_without_stopping_or_reopening(
+    model: TimerModel,
+    widget: TimerWidget,
+    clock: FakeClock,
+    conn: sqlite3.Connection,
+) -> None:
+    controller = _controller(model, widget, conn)
+    try:
+        _click(widget, "startPauseButton")
+        clock.advance(40)
+        controller.finalize_open_session()
+        assert model.state is TimerState.RUNNING
+        clock.advance(10)
+        controller.checkpoint()
+    finally:
+        controller.deleteLater()
+
+    assert conn.execute(
+        "SELECT active_seconds, finalized FROM sessions"
+    ).fetchall() == [(40, 1)]
 
 
 def test_main_persist_helper_inserts_row(tmp_path: Path) -> None:

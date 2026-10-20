@@ -17,6 +17,7 @@ SESSIONS_COLUMNS = [
     "project_number",
     "project_name",
     "client_name",
+    "finalized",
 ]
 
 
@@ -24,12 +25,14 @@ def _columns(conn: sqlite3.Connection, table: str) -> list[str]:
     return [row[1] for row in conn.execute(f"PRAGMA table_info({table})")]
 
 
-def test_fresh_db_has_schema_v2(tmp_path: Path) -> None:
+def test_fresh_db_has_current_schema(tmp_path: Path) -> None:
     conn = db.connect(tmp_path / "db.sqlite")
     try:
-        assert db.schema_version(conn) == db.SCHEMA_VERSION == 2
+        assert db.schema_version(conn) == db.SCHEMA_VERSION == 3
         assert _columns(conn, "sessions") == SESSIONS_COLUMNS
         assert _columns(conn, "settings") == ["key", "value"]
+        assert conn.execute("PRAGMA journal_mode").fetchone() == ("wal",)
+        assert conn.execute("PRAGMA synchronous").fetchone() == (2,)
     finally:
         conn.close()
 
@@ -46,7 +49,7 @@ def test_reopen_is_idempotent_and_keeps_data(tmp_path: Path) -> None:
 
     conn = db.connect(path)
     try:
-        assert db.schema_version(conn) == 2
+        assert db.schema_version(conn) == db.SCHEMA_VERSION
         row = conn.execute(
             "SELECT active_seconds, idle_seconds, cost, note FROM sessions"
         ).fetchone()
@@ -184,7 +187,7 @@ def test_v1_database_gains_empty_job_columns(tmp_path: Path) -> None:
 
     conn = db.connect(path)
     try:
-        assert db.schema_version(conn) == 2
+        assert db.schema_version(conn) == db.SCHEMA_VERSION
         assert _columns(conn, "sessions") == SESSIONS_COLUMNS
         row = db.list_recent_sessions(conn)[0]
         assert (row.project_number, row.project_name, row.client_name) == ("", "", "")
@@ -232,5 +235,76 @@ def test_summarize_project_filters_number_and_range(tmp_path: Path) -> None:
         assert db.summarize_project(conn, "7", 1000, 2000) == (30, 4.0)
         assert db.summarize_project(conn, "7", 0, 10) == (0, 0.0)
         assert db.summarize_project(conn, "missing", 0, 5000) == (0, 0.0)
+    finally:
+        conn.close()
+
+
+def test_v2_database_gains_finalized_column(tmp_path: Path) -> None:
+    path = tmp_path / "db.sqlite"
+    raw = sqlite3.connect(path)
+    raw.executescript(db._MIGRATIONS[1])
+    raw.executescript(db._MIGRATIONS[2])
+    raw.execute("PRAGMA user_version = 2")
+    raw.execute(
+        "INSERT INTO sessions (start_ts, end_ts, active_seconds, rate_snapshot, cost) "
+        "VALUES (10, 20, 5, 1.0, 2.0)"
+    )
+    raw.commit()
+    raw.close()
+
+    conn = db.connect(path)
+    try:
+        assert db.schema_version(conn) == db.SCHEMA_VERSION
+        assert _columns(conn, "sessions") == SESSIONS_COLUMNS
+        assert conn.execute("SELECT finalized FROM sessions").fetchone() == (1,)
+        assert [row.id for row in db.list_recent_sessions(conn)] == [1]
+    finally:
+        conn.close()
+
+
+def test_open_session_stays_hidden_until_finalized(tmp_path: Path) -> None:
+    conn = db.connect(tmp_path / "db.sqlite")
+    try:
+        open_id = db.save_session(
+            conn, None, 10, 20, 5, 1, 20.0, 1.0, finalized=False, project_number="7"
+        )
+        finished = db.insert_session(
+            conn, 30, 40, 9, 0, 0.0, 2.0, project_number="7"
+        )
+        assert open_id == 1
+        assert [row.id for row in db.list_recent_sessions(conn)] == [finished]
+        assert db.summarize_project(conn, "7", 0, 100) == (9, 2.0)
+
+        assert (
+            db.save_session(
+                conn, open_id, 10, 50, 15, 1, 20.0, 3.0, finalized=False, project_number="7"
+            )
+            == open_id
+        )
+        assert conn.execute("SELECT COUNT(*) FROM sessions").fetchone() == (2,)
+        assert conn.execute(
+            "SELECT end_ts, active_seconds, cost, finalized FROM sessions WHERE id = 1"
+        ).fetchone() == (50, 15, 3.0, 0)
+
+        assert db.finalize_open_sessions(conn) == 1
+        assert db.finalize_open_sessions(conn) == 0
+        assert [row.id for row in db.list_recent_sessions(conn)] == [finished, open_id]
+        assert db.summarize_project(conn, "7", 0, 100) == (24, 5.0)
+    finally:
+        conn.close()
+
+
+def test_save_session_inserts_when_the_row_is_gone(tmp_path: Path) -> None:
+    conn = db.connect(tmp_path / "db.sqlite")
+    try:
+        row_id = db.save_session(conn, None, 1, 2, 1, 0, 0.0, 0.0, finalized=False)
+        db.clear_sessions(conn)
+        replaced = db.save_session(
+            conn, row_id, 1, 9, 8, 0, 0.0, 1.0, finalized=True
+        )
+        assert replaced != row_id
+        assert conn.execute(
+            "SELECT id, active_seconds, finalized FROM sessions"
+        ).fetchone() == (replaced, 8, 1)
     finally:
         conn.close()

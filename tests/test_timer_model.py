@@ -250,6 +250,35 @@ def test_new_session_after_stop_starts_clean(model: TimerModel, clock: FakeClock
     assert model.start_ts == int(WALL_START + clock.now - 7)
 
 
+def test_session_snapshot_idle_is_none(model: TimerModel) -> None:
+    assert model.session_snapshot() is None
+
+
+def test_session_snapshot_matches_stop_without_resetting(
+    model: TimerModel, clock: FakeClock
+) -> None:
+    model.start()
+    clock.advance(10.6)
+    snap = model.session_snapshot()
+
+    assert model.state is TimerState.RUNNING
+    assert model.active_seconds == pytest.approx(10.6)
+    assert snap == model.stop()
+
+
+def test_session_snapshot_includes_pending_idle(
+    model: TimerModel, clock: FakeClock
+) -> None:
+    _auto_paused_example(model, clock)
+    snap = model.session_snapshot()
+
+    assert model.state is TimerState.AUTO_PAUSED
+    assert snap is not None
+    assert snap.active_seconds == 100
+    assert snap.idle_seconds == 510
+    assert model.stop() == snap
+
+
 def test_snapshot_idle(model: TimerModel) -> None:
     assert model.snapshot() == TimerSnapshot(TimerState.IDLE, 0.0, None)
 

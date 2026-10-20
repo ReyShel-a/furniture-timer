@@ -102,8 +102,8 @@ def timer_controller(
         model,
         widget,
         hourly_rate=lambda: RATE,
-        persist_session=lambda result, snap, cost: _persist_session(
-            conn, result, snap, cost
+        save_session=lambda row_id, result, rate, cost, finalized: _persist_session(
+            conn, result, rate, cost, row_id=row_id, finalized=finalized
         ),
     )
     yield c

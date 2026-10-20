@@ -1,9 +1,7 @@
 """Sample monitors every 30s and pause or resume the open session."""
 
-import json
 import logging
 import threading
-import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Final
@@ -36,30 +34,9 @@ FIRST_SAMPLE_MS: Final[int] = 1_000
 
 Grabber = Callable[[], list[GrayBuffer]]
 
-# #region agent log
-def _agent_log(hypothesis_id: str, location: str, message: str, data: dict[str, object]) -> None:
-    try:
-        payload = {
-            "sessionId": "fe8f6b",
-            "hypothesisId": hypothesis_id,
-            "location": location,
-            "message": message,
-            "data": data,
-            "timestamp": int(time.time() * 1000),
-        }
-        with open(
-            r"e:\CRM-AI-Mebel\Таймер_проектирования_мебель\debug-fe8f6b.log",
-            "a",
-            encoding="utf-8",
-        ) as handle:
-            handle.write(json.dumps(payload, ensure_ascii=False) + "\n")
-    except Exception:
-        pass
-# #endregion
-
 
 class ScreenController(QObject):
-    _matched = Signal(str, float)
+    _matched = Signal(str)
 
     def __init__(
         self,
@@ -86,7 +63,6 @@ class ScreenController(QObject):
         self._profile = load_profile(self._root)
         self._manual_hold = False
         self._screen_paused = False
-        self._last_sample_end: float | None = None
         self._matching = False
         self._matched.connect(self._on_matched)
 
@@ -125,39 +101,21 @@ class ScreenController(QObject):
         """Pause or resume from the latest monitor image. Failures leave the timer."""
         if not self._wants_poll() or self._matching:
             return
-        started = time.perf_counter()
-        gap_ms = None if self._last_sample_end is None else (started - self._last_sample_end) * 1000
-        # #region agent log
-        _agent_log(
-            "B",
-            "screen_controller.py:sample",
-            "sample start",
-            {
-                "gap_ms": None if gap_ms is None else round(gap_ms, 1),
-                "state": self._model.state.value,
-                "zones": len(self._profile.zones),
-                "screen_paused": self._screen_paused,
-            },
-        )
-        # #endregion
         try:
-            grab_started = time.perf_counter()
             grabs = self._grabber()
-            grab_ms = (time.perf_counter() - grab_started) * 1000
             if not grabs:
                 raise RuntimeError("no screens")
         except Exception:
             log.warning("Screen sample failed; timer left unchanged", exc_info=True)
-            self._last_sample_end = time.perf_counter()
             return
         zones = tuple(self._profile.zones)
         if block:
-            self._apply_signal(self._read_signal(grabs, grab_ms), started)
+            self._apply_signal(self._read_signal(grabs))
             return
         self._matching = True
         threading.Thread(
             target=self._score_later,
-            args=(grabs, zones, grab_ms, started),
+            args=(grabs, zones),
             daemon=True,
         ).start()
 
@@ -165,19 +123,16 @@ class ScreenController(QObject):
         self,
         grabs: list[GrayBuffer],
         zones: tuple[object, ...],
-        grab_ms: float,
-        started: float,
     ) -> None:
-        signal = self._read_signal(grabs, grab_ms, zones)
-        self._matched.emit("" if signal is None else signal, started)
+        signal = self._read_signal(grabs, zones)
+        self._matched.emit("" if signal is None else signal)
 
-    def _on_matched(self, signal: str, started: float) -> None:
+    def _on_matched(self, signal: str) -> None:
         self._matching = False
-        self._apply_signal(signal or None, started)
+        self._apply_signal(signal or None)
 
-    def _apply_signal(self, signal: str | None, started: float) -> None:
+    def _apply_signal(self, signal: str | None) -> None:
         if signal is None or not self._wants_poll():
-            self._last_sample_end = time.perf_counter()
             return
         action = decide(
             self._model.state,
@@ -189,19 +144,6 @@ class ScreenController(QObject):
             self._apply_pause()
         elif action is ScreenAction.RESUME:
             self._apply_resume()
-        self._last_sample_end = time.perf_counter()
-        # #region agent log
-        _agent_log(
-            "A",
-            "screen_controller.py:sample",
-            "sample end",
-            {
-                "total_ms": round((self._last_sample_end - started) * 1000, 1),
-                "signal": signal,
-                "action": action.value,
-            },
-        )
-        # #endregion
 
     def check_now(self) -> None:
         """Score the editor's current zones without changing the timer."""
@@ -287,40 +229,16 @@ class ScreenController(QObject):
     def _read_signal(
         self,
         grabs: list[GrayBuffer],
-        grab_ms: float,
         zones: tuple[object, ...] | None = None,
     ) -> str | None:
         try:
             if not grabs:
                 raise RuntimeError("no screens")
             scored: list[tuple[ZoneRole, float]] = []
-            zone_stats: list[dict[str, object]] = []
             for zone in self._profile.zones if zones is None else zones:
-                zone_started = time.perf_counter()
                 score = max((best_score(grab, zone.crop) for grab in grabs), default=0.0)
                 scored.append((zone.role, score))
-                zone_stats.append(
-                    {
-                        "role": zone.role.value,
-                        "crop": [zone.crop.width, zone.crop.height],
-                        "ms": round((time.perf_counter() - zone_started) * 1000, 1),
-                        "score": round(score, 3),
-                    }
-                )
-            signal = judge(scored)
-            # #region agent log
-            _agent_log(
-                "E",
-                "screen_controller.py:_read_signal",
-                "grab and match",
-                {
-                    "grab_ms": round(grab_ms, 1),
-                    "grabs": [[grab.width, grab.height] for grab in grabs],
-                    "zones": zone_stats,
-                },
-            )
-            # #endregion
-            return signal
+            return judge(scored)
         except Exception:
             log.warning("Screen sample failed; timer left unchanged", exc_info=True)
             return None
