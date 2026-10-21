@@ -54,10 +54,12 @@ def grab_cursor_screen() -> QImage | None:
     screen = QGuiApplication.screenAt(_cursor_pos()) or QGuiApplication.primaryScreen()
     if screen is None:
         return None
-    image = screen.grabWindow(0).toImage()
+    grab = screen.grabWindow(0)
+    image = grab.toImage()
     if image.isNull() or image.width() < 1 or image.height() < 1:
         return None
-    return image
+    # Detach before `grab` is released; otherwise the pixels can change.
+    return image.copy(0, 0, image.width(), image.height())
 
 
 def _cursor_pos() -> QPoint:

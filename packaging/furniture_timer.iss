@@ -1,6 +1,6 @@
 ; Per-user Windows installer. No administrator rights: the app keeps its data in %APPDATA%.
 
-#define AppVersion "0.4.0"
+#define AppVersion "0.4.1"
 
 [Setup]
 AppId={{A7C3E1B4-9F26-4D58-8C0A-6B5E2F91D047}

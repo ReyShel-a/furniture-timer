@@ -77,12 +77,25 @@ class ScreenDraft:
     def has_active_zone(self) -> bool:
         return any(zone.role is ZoneRole.ACTIVE for zone in self.zones)
 
-    def add_image(self, image: QImage) -> str:
-        source_id = uuid.uuid4().hex
-        self.sources.append(DraftSource(source_id, image))
-        self.source_id = source_id
-        self.selected = None
-        return source_id
+    def add_image(self, image: QImage, *, replace: bool = False) -> str:
+        """Store a screenshot. replace=True overwrites the selected shot."""
+        stored = image.copy(0, 0, image.width(), image.height())
+        current = self.current_source() if replace else None
+        if current is None:
+            source_id = uuid.uuid4().hex
+            self.sources.append(DraftSource(source_id, stored))
+            self.source_id = source_id
+            self.selected = None
+            return source_id
+        current.image = stored
+        self.zones = [
+            zone
+            for zone in self.zones
+            if zone.source_id != current.id or _fits(stored, zone)
+        ]
+        if not any(zone.id == self.selected for zone in self.zones):
+            self.selected = None
+        return current.id
 
     def add_zone(
         self, x: int, y: int, width: int, height: int, role: ZoneRole
@@ -184,13 +197,17 @@ def _crop(sources: list[DraftSource], zone: DraftZone) -> GrayBuffer | None:
     if source is None:
         return None
     image = source.image
-    if (
-        zone.width < 1
-        or zone.height < 1
-        or zone.x < 0
-        or zone.y < 0
-        or zone.x + zone.width > image.width()
-        or zone.y + zone.height > image.height()
-    ):
+    if not _fits(image, zone):
         return None
     return gray_buffer_from_image(image.copy(zone.x, zone.y, zone.width, zone.height))
+
+
+def _fits(image: QImage, zone: DraftZone) -> bool:
+    return (
+        zone.width >= 1
+        and zone.height >= 1
+        and zone.x >= 0
+        and zone.y >= 0
+        and zone.x + zone.width <= image.width()
+        and zone.y + zone.height <= image.height()
+    )

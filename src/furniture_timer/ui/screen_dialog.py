@@ -67,8 +67,8 @@ class ScreenDialog(QDialog):
     def has_active_zone(self) -> bool:
         return self._draft.has_active_zone()
 
-    def add_image(self, image: QImage) -> str:
-        source_id = self._draft.add_image(image)
+    def add_image(self, image: QImage, *, replace: bool = False) -> str:
+        source_id = self._draft.add_image(image, replace=replace)
         self.show_status("")
         self._sync_view()
         return source_id
@@ -211,7 +211,7 @@ class ScreenDialog(QDialog):
         if image is None:
             self.show_status(t("screen.error.capture"), error=True)
             return
-        self.add_image(image)
+        self.add_image(image, replace=True)
 
     def _delete_selected(self) -> None:
         self._draft.delete_selected()
