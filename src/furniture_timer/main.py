@@ -137,6 +137,7 @@ def _run_gui(settings: Settings, conn: sqlite3.Connection) -> int:
         settings_dialog,
         history_dialog,
         timer_controller,
+        currency=lambda: settings.currency,
         parent=app,
     )
     tray = TrayController(widget, timer_controller, parent=app)

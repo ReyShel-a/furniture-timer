@@ -25,6 +25,10 @@ def test_russian_strings_resolve(key: str) -> None:
         index=1,
         count=1,
         number="7",
+        client="Ivan",
+        period="1 окт 2026 — 21 окт 2026",
+        start="1 окт 2026",
+        end="21 окт 2026",
     ) != key
 
 

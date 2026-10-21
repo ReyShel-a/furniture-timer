@@ -11,14 +11,13 @@ from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
     QComboBox,
-    QDateEdit,
     QLabel,
     QPushButton,
     QTableWidget,
 )
 
 from furniture_timer import db
-from furniture_timer.formatting import format_datetime, format_hms
+from furniture_timer.formatting import format_datetime, format_hms, format_money
 from furniture_timer.i18n import t
 from furniture_timer.main import _persist_session
 from furniture_timer.session_csv import BLANK_PROJECT, CSV_COLUMNS, GROUP_COLUMNS
@@ -179,11 +178,10 @@ def _cover(dialog: HistoryDialog, *timestamps: int) -> None:
     """Widen the calendar period so these unix times are visible."""
     moments = [datetime.fromtimestamp(ts) for ts in timestamps]
     first, last = min(moments), max(moments)
-    period_from = dialog.findChild(QDateEdit, "periodFrom")
-    period_to = dialog.findChild(QDateEdit, "periodTo")
-    assert period_from is not None and period_to is not None
-    period_from.setDate(QDate(first.year, first.month, first.day))
-    period_to.setDate(QDate(last.year, last.month, last.day))
+    dialog.set_period(
+        QDate(first.year, first.month, first.day),
+        QDate(last.year, last.month, last.day),
+    )
 
 
 def _check_row(dialog: HistoryDialog, row: int) -> None:
@@ -334,34 +332,103 @@ def test_header_sort_reorders_visible_rows(
     assert [_table(dialog).item(row, 4).text() for row in range(4)] == ["12", "7", "7", ""]
 
 
-def test_summary_follows_project_and_period(
+def test_client_filter_totals_projects_and_period(
     controller: HistoryController, dialog: HistoryDialog, conn: sqlite3.Connection
 ) -> None:
     inside = datetime.now().replace(day=1, hour=12, minute=0, second=0, microsecond=0)
     outside = inside.replace(year=inside.year - 1)
     db.insert_session(
-        conn, int(inside.timestamp()), int(inside.timestamp()) + 10, 3600, 0, 0.0, 10.0, project_number="7"
+        conn,
+        int(inside.timestamp()),
+        int(inside.timestamp()) + 10,
+        3600,
+        0,
+        0.0,
+        10.0,
+        project_number="7",
+        project_name="Kitchen",
+        client_name="Ivan",
     )
     db.insert_session(
-        conn, int(outside.timestamp()), int(outside.timestamp()) + 10, 100, 0, 0.0, 99.0, project_number="7"
+        conn,
+        int(inside.timestamp()) + 20,
+        int(inside.timestamp()) + 30,
+        50,
+        0,
+        0.0,
+        5.0,
+        project_number="12",
+        project_name="Hall",
+        client_name="Ivan",
     )
     db.insert_session(
-        conn, int(inside.timestamp()), int(inside.timestamp()) + 10, 50, 0, 0.0, 5.0, project_number="12"
+        conn,
+        int(outside.timestamp()),
+        int(outside.timestamp()) + 10,
+        100,
+        0,
+        0.0,
+        99.0,
+        project_number="7",
+        project_name="Kitchen",
+        client_name="Ivan",
+    )
+    db.insert_session(
+        conn,
+        int(inside.timestamp()) + 40,
+        int(inside.timestamp()) + 50,
+        20,
+        0,
+        0.0,
+        3.0,
+        project_number="3",
+        project_name="Desk",
+        client_name="Anna",
     )
     controller.open()
-    summary = dialog.findChild(QLabel, "summaryLabel")
+    cost = dialog.findChild(QLabel, "summaryCost")
+    caption = dialog.findChild(QLabel, "summaryCaption")
+    time_label = dialog.findChild(QLabel, "summaryTime")
+    client = dialog.findChild(QComboBox, "summaryClient")
     project = dialog.findChild(QComboBox, "summaryProject")
-    assert summary is not None and project is not None
-    assert summary.text() == t("history.summary.pick")
+    assert cost is not None and caption is not None and time_label is not None
+    assert client is not None and project is not None
+    assert cost.isHidden()
+    assert caption.text() == t("history.summary.pick")
+    assert not project.isEnabled()
+    assert _table(dialog).rowCount() == 3
+
+    client.setCurrentIndex(client.findData("Ivan"))
+    assert project.isEnabled()
+    assert project.itemText(0) == t("history.filter.project.all")
+    assert "Kitchen" in project.itemText(project.findData("7"))
+    assert project.findData("3") < 0
+    assert _table(dialog).rowCount() == 2
+    assert { _table(dialog).item(row, 6).text() for row in range(2) } == {"Ivan"}
+    assert cost.text() == format_money(15.0, "₽")
+    assert not cost.isHidden()
+    assert time_label.text() == format_hms(3650)
+    assert caption.text() == t(
+        "history.summary.caption", client="Ivan", period=dialog.period_label()
+    )
+
     project.setCurrentIndex(project.findData("7"))
-    assert summary.text() == t("history.summary.total", time=format_hms(3600), cost=10.0)
+    assert _table(dialog).rowCount() == 1
+    assert _table(dialog).item(0, 4).text() == "7"
+    assert cost.text() == format_money(10.0, "₽")
+    assert time_label.text() == format_hms(3600)
+    assert caption.text() == t(
+        "history.summary.caption.project",
+        client="Ivan",
+        number="7 Kitchen",
+        period=dialog.period_label(),
+    )
+
     past = QDate(outside.year, outside.month, outside.day)
-    period_from = dialog.findChild(QDateEdit, "periodFrom")
-    period_to = dialog.findChild(QDateEdit, "periodTo")
-    assert period_from is not None and period_to is not None
-    period_from.setDate(past)
-    period_to.setDate(past)
-    assert summary.text() == t("history.summary.total", time=format_hms(100), cost=99.0)
+    dialog.set_period(past, past)
+    assert _table(dialog).rowCount() == 1
+    assert cost.text() == format_money(99.0, "₽")
+    assert time_label.text() == format_hms(100)
 
 
 def test_export_writes_chosen_path(
@@ -520,9 +587,7 @@ def test_period_hides_sessions_outside_the_range(
     assert _table(dialog).rowCount() == 1
     assert _table(dialog).item(0, 1).text() == format_datetime(int(inside.timestamp()))
     past = QDate(outside.year, outside.month, outside.day)
-    period_from = dialog.findChild(QDateEdit, "periodFrom")
-    assert period_from is not None
-    period_from.setDate(past)
+    dialog.set_period(past, QDate.currentDate())
     assert _table(dialog).rowCount() == 2
 
 

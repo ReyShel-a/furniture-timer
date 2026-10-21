@@ -72,11 +72,13 @@ USED_KEYS = [
     "history.error.delete",
     "history.error.summary",
     "history.summary.pick",
-    "history.summary.total",
+    "history.summary.cost",
+    "history.summary.caption",
+    "history.summary.caption.project",
+    "history.filter.project.all",
     "history.selection.total",
     "history.selection.project",
-    "history.period.from",
-    "history.period.to",
+    "history.period.range",
     "tray.action.show",
     "tray.action.quit",
     "screen.dialog.title",
@@ -297,6 +299,10 @@ def test_used_i18n_keys_exist(key: str) -> None:
         index=1,
         count=1,
         number="1",
+        client="Ivan",
+        period="1 Oct 2026 — 21 Oct 2026",
+        start="1 Oct 2026",
+        end="21 Oct 2026",
     ) != key
 
 

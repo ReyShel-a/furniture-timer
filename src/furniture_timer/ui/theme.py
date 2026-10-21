@@ -124,18 +124,6 @@ QLineEdit {{
 QLineEdit:focus {{
     border: 1px solid {ACCENT};
 }}
-QDateEdit {{
-    color: {FG};
-    background-color: {SURFACE};
-    border: 1px solid {SURFACE_HOVER};
-    border-radius: 4px;
-    padding: 2px 4px;
-    font-size: 9pt;
-}}
-QDateEdit::drop-down {{
-    border: none;
-    width: 16px;
-}}
 QComboBox {{
     color: {FG};
     background-color: {SURFACE};
@@ -150,6 +138,79 @@ QComboBox QAbstractItemView {{
     selection-background-color: {ACCENT};
     selection-color: {ON_COLOR};
     border: 1px solid {SURFACE_HOVER};
+}}
+QComboBox:disabled {{
+    color: {MUTED};
+}}
+#summaryCard {{
+    background-color: {SURFACE};
+    border-radius: 8px;
+}}
+#summaryCostCaption {{
+    color: {MUTED};
+    font-size: 9pt;
+}}
+#summaryCost {{
+    color: {ACCENT};
+    font-family: {MONO_FONT};
+    font-size: 22pt;
+}}
+#summaryTime {{
+    color: {MUTED};
+    font-family: {MONO_FONT};
+    font-size: 12pt;
+}}
+#summaryCaption, #periodLabel {{
+    color: {FG};
+    font-size: 9pt;
+}}
+#selectionLabel {{
+    color: {MUTED};
+    font-size: 9pt;
+}}
+QCalendarWidget QWidget {{
+    background-color: {SURFACE};
+    color: {FG};
+    alternate-background-color: {SURFACE};
+}}
+QCalendarWidget QWidget#qt_calendar_navigationbar {{
+    background-color: {SURFACE};
+}}
+QCalendarWidget QToolButton {{
+    color: {FG};
+    background-color: {SURFACE};
+    border: none;
+    border-radius: 4px;
+    padding: 4px;
+}}
+QCalendarWidget QToolButton:hover {{
+    background-color: {SURFACE_HOVER};
+}}
+QCalendarWidget QSpinBox {{
+    color: {FG};
+    background-color: {SURFACE};
+    selection-background-color: {ACCENT};
+    selection-color: {ON_COLOR};
+}}
+QCalendarWidget QAbstractItemView {{
+    color: {FG};
+    background-color: {SURFACE};
+    selection-background-color: {ACCENT};
+    selection-color: {ON_COLOR};
+}}
+QCalendarWidget QHeaderView::section {{
+    color: {FG};
+    background-color: {SURFACE};
+    border: none;
+    padding: 4px;
+}}
+QCalendarWidget QMenu {{
+    color: {FG};
+    background-color: {SURFACE};
+}}
+QCalendarWidget QMenu::item:selected {{
+    background-color: {ACCENT};
+    color: {ON_COLOR};
 }}
 #errorLabel {{
     color: {DANGER};
@@ -167,6 +228,14 @@ QTableWidget {{
 }}
 QTableWidget::item {{
     padding: 2px;
+}}
+#historyTable {{
+    font-size: 10pt;
+    alternate-background-color: #383838;
+}}
+#historyTable QHeaderView::section {{
+    font-size: 9pt;
+    padding: 6px 4px;
 }}
 QHeaderView::section {{
     color: {FG};

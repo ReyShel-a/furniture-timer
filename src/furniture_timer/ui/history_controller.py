@@ -10,8 +10,9 @@ from PySide6.QtCore import QObject
 from PySide6.QtWidgets import QFileDialog
 
 from furniture_timer import db
-from furniture_timer.formatting import format_datetime, format_hms
+from furniture_timer.formatting import format_datetime, format_hms, format_money
 from furniture_timer.i18n import t
+from furniture_timer.settings import DEFAULT_CURRENCY
 from furniture_timer.session_csv import (
     BLANK_PROJECT,
     group_sessions_by_project,
@@ -37,12 +38,14 @@ class HistoryController(QObject):
         timer_controller: TimerController,
         get_save_path: GetSavePath | None = None,
         parent: QObject | None = None,
+        currency: Callable[[], str] | None = None,
     ) -> None:
         super().__init__(parent)
         self._conn = conn
         self._widget = widget
         self._settings_dialog = settings_dialog
         self._dialog = dialog
+        self._currency = currency or (lambda: DEFAULT_CURRENCY)
         self._rows: list[db.SessionRow] = []
         self._date_sort_desc: bool | None = None
         self._project_sort_desc: bool | None = None
@@ -55,7 +58,8 @@ class HistoryController(QObject):
         dialog.clear_clicked.connect(self._on_clear)
         dialog.close_clicked.connect(self._on_close)
         dialog.sort_clicked.connect(self._on_sort)
-        dialog.summary_changed.connect(self._refresh_summary)
+        dialog.client_changed.connect(self._on_client_changed)
+        dialog.project_changed.connect(self._show_rows)
         dialog.period_changed.connect(self._reload)
         dialog.selection_changed.connect(self._refresh_selection)
         timer_controller.state_changed.connect(self._on_state_changed)
@@ -73,17 +77,15 @@ class HistoryController(QObject):
         try:
             start_ts, end_ts = self._dialog.period_bounds()
             self._rows = db.list_sessions_between(self._conn, start_ts, end_ts)
-            projects = db.list_known_projects(self._conn)
+            self._dialog.set_client_choices(db.list_known_clients(self._conn))
+            self._load_client_projects()
         except Exception:
             log.exception("Failed to load session history")
             self._rows = []
+            self._dialog.set_client_choices([])
             self._dialog.set_project_choices([])
-            self._show_rows()
-            self._refresh_summary()
-            return
-        self._dialog.set_project_choices(project.number for project in projects)
+            self._dialog.show_error(t("history.error.summary"))
         self._show_rows()
-        self._refresh_summary()
 
     def _show_rows(self) -> None:
         visible = self._visible_rows()
@@ -108,13 +110,26 @@ class HistoryController(QObject):
             self._dialog.show_empty(False)
             self._dialog.set_clear_enabled(True)
         self._refresh_selection()
+        self._refresh_summary()
+
+    def _matching_rows(self) -> list[db.SessionRow]:
+        """Sessions in the loaded period, narrowed by the chosen client and project."""
+        client = self._dialog.selected_client()
+        project = self._dialog.selected_project()
+        rows = self._rows
+        if client:
+            rows = [row for row in rows if row.client_name == client]
+        if project:
+            rows = [row for row in rows if row.project_number == project]
+        return rows
 
     def _visible_rows(self) -> list[db.SessionRow]:
+        rows = self._matching_rows()
         if self._date_sort_desc is not None:
-            return sort_sessions_by_start(self._rows, descending=self._date_sort_desc)
+            return sort_sessions_by_start(rows, descending=self._date_sort_desc)
         if self._project_sort_desc is not None:
-            return sort_sessions_by_project(self._rows, descending=self._project_sort_desc)
-        return self._rows
+            return sort_sessions_by_project(rows, descending=self._project_sort_desc)
+        return rows
 
     def _selected_rows(self) -> list[db.SessionRow]:
         chosen = set(self._dialog.checked_ids())
@@ -137,21 +152,38 @@ class HistoryController(QObject):
             return
         self._show_rows()
 
-    def _refresh_summary(self) -> None:
-        number = self._dialog.selected_project()
-        if not number:
-            self._dialog.show_summary(t("history.summary.pick"))
-            return
-        try:
-            start_ts, end_ts = self._dialog.period_bounds()
-            active_seconds, cost = db.summarize_project(self._conn, number, start_ts, end_ts)
-        except Exception:
-            log.exception("Failed to summarize project")
-            self._dialog.show_error(t("history.error.summary"))
-            return
+    def _on_client_changed(self) -> None:
         self._dialog.clear_error()
+        try:
+            self._load_client_projects()
+        except Exception:
+            log.exception("Failed to list client projects")
+            self._dialog.set_project_choices([])
+            self._dialog.show_error(t("history.error.summary"))
+        self._show_rows()
+
+    def _load_client_projects(self) -> None:
+        client = self._dialog.selected_client()
+        if not client:
+            self._dialog.set_project_choices([])
+            return
+        projects = db.list_projects_for_client(self._conn, client)
+        self._dialog.set_project_choices(
+            (project.number, project.name) for project in projects
+        )
+
+    def _refresh_summary(self) -> None:
+        client = self._dialog.selected_client()
+        if not client:
+            self._dialog.show_summary("", "", "")
+            return
+        matched = self._matching_rows()
         self._dialog.show_summary(
-            t("history.summary.total", time=format_hms(active_seconds), cost=cost)
+            format_money(sum(row.cost for row in matched), self._currency()),
+            format_hms(sum(row.active_seconds for row in matched)),
+            client,
+            self._dialog.selected_project(),
+            self._dialog.selected_project_name(),
         )
 
     def _refresh_selection(self) -> None:

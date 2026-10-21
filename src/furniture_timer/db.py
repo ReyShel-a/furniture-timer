@@ -290,6 +290,32 @@ def list_known_projects(conn: sqlite3.Connection) -> list[ProjectRef]:
     return [ProjectRef(str(number), str(name)) for number, name in rows]
 
 
+def list_projects_for_client(conn: sqlite3.Connection, client_name: str) -> list[ProjectRef]:
+    """Project numbers that have a session for this client, newest first.
+
+    The name comes from the newest session of that number for this client,
+    not from another client's later session. Blank numbers and a blank client
+    match nothing.
+    """
+    if not client_name.strip():
+        return []
+    rows = conn.execute(
+        """
+        SELECT s.project_number, s.project_name
+        FROM sessions AS s
+        INNER JOIN (
+            SELECT project_number, MAX(id) AS max_id
+            FROM sessions
+            WHERE client_name = ? AND TRIM(project_number) != ''
+            GROUP BY project_number
+        ) AS latest ON s.id = latest.max_id
+        ORDER BY s.id DESC
+        """,
+        (client_name,),
+    ).fetchall()
+    return [ProjectRef(str(number), str(name)) for number, name in rows]
+
+
 def summarize_project(
     conn: sqlite3.Connection,
     project_number: str,

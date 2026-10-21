@@ -2,7 +2,7 @@ from datetime import datetime
 
 import pytest
 
-from furniture_timer.formatting import format_clock, format_datetime, format_hms
+from furniture_timer.formatting import format_clock, format_datetime, format_hms, format_money
 
 
 @pytest.mark.parametrize(
@@ -17,6 +17,11 @@ from furniture_timer.formatting import format_clock, format_datetime, format_hms
 )
 def test_format_hms(seconds: float, expected: str) -> None:
     assert format_hms(seconds) == expected
+
+
+def test_format_money_groups_thousands_and_appends_currency() -> None:
+    assert format_money(1250.5, "₽") == "1 250.50 ₽"
+    assert format_money(10, "EUR") == "10.00 EUR"
 
 
 def test_format_clock_uses_local_time() -> None:

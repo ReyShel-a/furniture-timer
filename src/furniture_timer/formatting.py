@@ -3,6 +3,12 @@
 from datetime import datetime
 
 
+def format_money(amount: float, currency: str) -> str:
+    """Amount with a space as the thousands separator and a currency suffix."""
+    grouped = f"{amount:,.2f}".replace(",", " ")
+    return f"{grouped} {currency}"
+
+
 def format_hms(seconds: float) -> str:
     """Whole elapsed seconds as HH:MM:SS; hours widen past 99, negatives clamp to zero."""
     total = max(0, int(seconds))

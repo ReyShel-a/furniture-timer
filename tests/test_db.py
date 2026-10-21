@@ -217,6 +217,39 @@ def test_known_projects_use_latest_name_and_skip_blanks(tmp_path: Path) -> None:
         conn.close()
 
 
+def test_projects_for_client_keep_that_clients_latest_name(tmp_path: Path) -> None:
+    conn = db.connect(tmp_path / "db.sqlite")
+    try:
+        db.insert_session(
+            conn, 1, 2, 1, 0, 0.0, 0.0, project_number="12", project_name="Kitchen", client_name="Ivan"
+        )
+        db.insert_session(
+            conn, 3, 4, 1, 0, 0.0, 0.0, project_number="12", project_name="Wardrobe", client_name="Ivan"
+        )
+        db.insert_session(
+            conn, 5, 6, 1, 0, 0.0, 0.0, project_number="9", project_name="Hall", client_name="Ivan"
+        )
+        db.insert_session(
+            conn, 7, 8, 1, 0, 0.0, 0.0, project_number="12", project_name="Other", client_name="Anna"
+        )
+        db.insert_session(
+            conn, 9, 10, 1, 0, 0.0, 0.0, project_number="7", project_name="Kitchen", client_name="Anna"
+        )
+        db.insert_session(conn, 11, 12, 1, 0, 0.0, 0.0, project_name="Skip", client_name="Ivan")
+        assert db.list_projects_for_client(conn, "Ivan") == [
+            db.ProjectRef("9", "Hall"),
+            db.ProjectRef("12", "Wardrobe"),
+        ]
+        assert db.list_projects_for_client(conn, "Anna") == [
+            db.ProjectRef("7", "Kitchen"),
+            db.ProjectRef("12", "Other"),
+        ]
+        assert db.list_projects_for_client(conn, " ") == []
+        assert db.list_projects_for_client(conn, "Nobody") == []
+    finally:
+        conn.close()
+
+
 def test_summarize_project_filters_number_and_range(tmp_path: Path) -> None:
     conn = db.connect(tmp_path / "db.sqlite")
     try:

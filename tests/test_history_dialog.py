@@ -1,9 +1,12 @@
 from collections.abc import Iterator
+from datetime import datetime
 
 import pytest
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QDate, Qt
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication, QCheckBox, QLabel, QPushButton, QTableWidget
+from PySide6.QtWidgets import QApplication, QCheckBox, QComboBox, QLabel, QPushButton, QTableWidget
+
+from furniture_timer.ui.range_calendar import RangeCalendar
 
 from furniture_timer.i18n import t
 from furniture_timer.ui.widget import TimerWidget
@@ -223,6 +226,76 @@ def test_escape_emits_close(dialog: HistoryDialog) -> None:
     dialog.show()
     QTest.keyClick(dialog, Qt.Key.Key_Escape)
     assert fired == ["close"]
+
+
+def test_summary_card_hides_figures_until_a_client_is_shown(dialog: HistoryDialog) -> None:
+    assert _label(dialog, "summaryCaption").text() == t("history.summary.pick")
+    assert _label(dialog, "summaryCostCaption").text() == t("history.summary.cost")
+    assert _label(dialog, "summaryCost").isHidden()
+    assert _label(dialog, "summaryTime").isHidden()
+    project = dialog.findChild(QComboBox, "summaryProject")
+    assert project is not None
+    assert not project.isEnabled()
+    assert project.itemText(0) == t("history.filter.project.all")
+
+    dialog.show_summary("15.00 ₽", "01:00:50", "Ivan")
+    assert not _label(dialog, "summaryCost").isHidden()
+    assert _label(dialog, "summaryCost").text() == "15.00 ₽"
+    assert _label(dialog, "summaryTime").text() == "01:00:50"
+    assert _label(dialog, "summaryCaption").text() == t(
+        "history.summary.caption", client="Ivan", period=dialog.period_label()
+    )
+    dialog.show_summary("10.00 ₽", "01:00:00", "Ivan", "7", "Kitchen")
+    assert _label(dialog, "summaryCaption").text() == t(
+        "history.summary.caption.project",
+        client="Ivan",
+        number="7 Kitchen",
+        period=dialog.period_label(),
+    )
+
+
+def test_set_period_orders_bounds(dialog: HistoryDialog) -> None:
+    dialog.set_period(QDate(2026, 10, 21), QDate(2026, 10, 1))
+    start, end = dialog.period_bounds()
+    assert datetime.fromtimestamp(start) == datetime(2026, 10, 1)
+    assert datetime.fromtimestamp(end) == datetime(2026, 10, 21, 23, 59, 59)
+
+
+def test_calendar_commits_range_on_the_second_click(dialog: HistoryDialog) -> None:
+    fired: list[int] = []
+    dialog.period_changed.connect(lambda: fired.append(1))
+    calendar = dialog.findChild(RangeCalendar, "periodCalendar")
+    assert calendar is not None
+    calendar.pick(QDate(2026, 5, 2))
+    assert fired == []
+    calendar.pick(QDate(2026, 5, 10))
+    assert fired == [1]
+    start, end = dialog.period_bounds()
+    assert datetime.fromtimestamp(start) == datetime(2026, 5, 2)
+    assert datetime.fromtimestamp(end) == datetime(2026, 5, 10, 23, 59, 59)
+    calendar.pick(QDate(2026, 5, 20))
+    assert fired == [1]
+    calendar.pick(QDate(2026, 5, 4))
+    start, end = dialog.period_bounds()
+    assert datetime.fromtimestamp(start).day == 4
+    assert datetime.fromtimestamp(end).day == 20
+
+
+def test_client_enables_only_that_clients_projects(dialog: HistoryDialog) -> None:
+    dialog.set_client_choices(["Anna", "Ivan"])
+    dialog.set_project_choices([("9", "Hall"), ("12", "")])
+    client = dialog.findChild(QComboBox, "summaryClient")
+    project = dialog.findChild(QComboBox, "summaryProject")
+    assert client is not None and project is not None
+    client.setCurrentIndex(client.findData("Ivan"))
+    assert project.isEnabled()
+    dialog.set_project_choices([("7", "Kitchen"), ("12", "Wardrobe")])
+    assert project.currentData() == ""
+    assert project.itemText(project.findData("7")) == "7 · Kitchen"
+    project.setCurrentIndex(project.findData("12"))
+    dialog.set_project_choices([("12", "Wardrobe"), ("3", "Desk")])
+    assert project.currentData() == "12"
+    assert dialog.selected_project_name() == "Wardrobe"
 
 
 def test_place_near_widget(dialog: HistoryDialog, widget: TimerWidget) -> None:
